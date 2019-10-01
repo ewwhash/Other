@@ -5,7 +5,7 @@
 --local com = require("component")
 --local internet = com.internet
  
-local address, socket, channels, stream = "stem.fomalhaut.me", nil, {}, ""
+local socket, channels, stream = nil, {}, ""
  
 local function buildPackage(type, id, message)
     local package = string.char(type)
@@ -89,7 +89,7 @@ function reconnect()
     if isConnected() then
         disconnect()
     end
-    socket = internet.connect(address, 5733) --port
+    socket = internet.connect("stem.fomalhaut.me", 5733) --port
     -- check connection until there will be some useful information
     -- also this serves to kick off internet_ready events generation
     while true do
