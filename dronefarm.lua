@@ -13,6 +13,7 @@ status = {
    
 function sleep(timeout)
     deadline = computer.uptime() + timeout
+    
     repeat
         computer.pullSignal(deadline - computer.uptime())
     until computer.uptime() >= deadline
@@ -105,7 +106,7 @@ function farm()
         end
         stuff()
     end
-    
+
     d.setStatusText(status.wait[1])
     d.setLightColor(status.wait[2])
 end
