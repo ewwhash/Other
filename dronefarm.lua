@@ -19,8 +19,9 @@ function sleep(timeout)
 end
  
 function move(x, y, z)
-    d.move(x, y, z)
-    while d.getOffset() >= .5 do
+    d.move(-x, y, z)
+
+    while d.getOffset() > .5 do
         sleep(.1)
     end
 end
@@ -28,10 +29,16 @@ end
 function go_home()
     move(-x, 0, -z)
     move(0, 0, -2)
+
+    while d.getOffset() > 0 do
+        sleep(.5)
+    end
+
     for i = 1, d.inventorySize() do
         d.select(i)
         d.drop(0)
     end
+
     d.select(1)
     move(0, -1, 1)
 end
@@ -79,6 +86,7 @@ function farm()
     x, z = 1, 0
     move(1, 1, 1)
     stuff()
+
     while true do
         if x == 1 and z + 1 == size_z or x == size_x and z + 1 == size_z then
             go_home()
@@ -97,6 +105,7 @@ function farm()
         end
         stuff()
     end
+    
     d.setStatusText(status.wait[1])
     d.setLightColor(status.wait[2])
 end
