@@ -13,14 +13,14 @@ status = {
    
 function sleep(timeout)
     deadline = computer.uptime() + timeout
-    
+
     repeat
         computer.pullSignal(deadline - computer.uptime())
     until computer.uptime() >= deadline
 end
  
 function move(x, y, z)
-    d.move(-x, y, z)
+    d.move(x, y, z)
 
     while d.getOffset() > .5 do
         sleep(.1)
