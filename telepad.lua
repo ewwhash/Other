@@ -136,7 +136,7 @@ local function addPoint()
 
             if item then
                 if item.name == "EnderIO:itemCoordSelector" or item.name == "enderio:item_location_printout" then
-                    chat.say("§7Обнаружена новая точка: '§a" .. item.label .. "§7'...")
+                    chat.say("§7Обнаружена новая точка: '§a" .. item.label .. "§7'!")
                     scan()
                 else
                     garbage(slot)
