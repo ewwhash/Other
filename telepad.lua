@@ -2,16 +2,27 @@ require("term").clear()
 local component = require("component")
 local event = require("event")
 local unicode = require("unicode")
-local inv, robot, redstone, chat = component.inventory_controller, component.robot, component.redstone, component.chat
+local inv, robot, redstone, chat, magnet = component.inventory_controller, component.robot, component.redstone, component.chat, component.tractor_beam
 local size = robot.inventorySize()
 local teleports, oldDestination
 
-local symbol, side, bufferSide = "?", 1, 3 --bufferSide - для версий выше 1.7
+local symbol, side, bufferSide = "?", 1, 3 --bufferSide только для версий выше 1.7
 local version = "paper" --Версия работы - selector для 1.7, paper - для версией выше 1.7
-local whiteList = {"Vasya", "Petya"} --Белый список игроков, другие игроки не смогут использовать телепорт
+local whiteList = {"ewwhash", "Chesh1r3", "NemoCrazy87", "hohserg"}
 
 local function sort(a, b)
     return a.label < b.label
+end
+
+local function garbage(slot)
+    local item = inv.getStackInInternalSlot(slot)
+
+    if item then 
+        robot.select(slot)
+        chat.say("§7Выкидываю мусор: '§a" .. item.label .. "§7'...")
+        robot.drop(0)
+        robot.select(1)
+    end
 end
 
 local function scan()
@@ -21,14 +32,18 @@ local function scan()
     for slot = 1, size do 
         local item = inv.getStackInInternalSlot(slot)
 
-        if item and (item.name == "EnderIO:itemCoordSelector" or item.name == "enderio:item_location_printout") then
-            local teleport = #teleports + 1
-            teleports[teleport] = {label = item.label, slot = slot}
-            teleports[teleport].title = "§f'§a" .. teleports[teleport].label .. "§f'"
-            teleports[teleport].page = page
-            counter = counter + 1
-            if counter == 8 then
-                page, counter = page + 1, 0
+        if item then
+            if item.name == "EnderIO:itemCoordSelector" or item.name == "enderio:item_location_printout" then
+                local teleport = #teleports + 1
+                teleports[teleport] = {label = item.label, slot = slot}
+                teleports[teleport].title = "§f'§a" .. teleports[teleport].label .. "§f'"
+                teleports[teleport].page = page
+                counter = counter + 1
+                if counter == 8 then
+                    page, counter = page + 1, 0
+                end
+            else
+                garbage(slot)
             end
         end
     end
@@ -111,6 +126,25 @@ local function findDestination(destination)
     end
 end
 
+local function addPoint() 
+    if magnet.suck() then
+        local changed, slot = event.pull(.3, "inventory_changed")
+
+        if changed then 
+            local item = inv.getStackInInternalSlot(slot)
+
+            if item then
+                if item.name == "EnderIO:itemCoordSelector" or item.name == "enderio:item_location_printout" then
+                    chat.say("§7Обнаружена новая точка: '§a" .. item.label .. "§7'...")
+                    scan()
+                else
+                    garbage(slot)
+                end
+            end
+        end
+    end
+end
+
 local function list(page)   
     if page then 
         page = tonumber(page)
@@ -142,13 +176,15 @@ local cmd = {
     help = help,
     tp = findDestination,
     list = list,
-    update = scan
+    update = scan,
+    addpoint = addPoint
 }
 
 for user = 1, #whiteList do 
     whiteList[whiteList[user]], whiteList[user] = true, nil
 end 
 robot.select(1)
+chat.setName("§eTelepad§7§o")
 scan()
 
 while true do 
