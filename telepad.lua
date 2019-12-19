@@ -8,7 +8,7 @@ local teleports, oldDestination
 
 local symbol, side, bufferSide = "?", 1, 3 --bufferSide только для версий выше 1.7
 local version = "paper" --Версия работы - selector для 1.7, paper - для версией выше 1.7
-local whiteList = {"ewwhash", "Chesh1r3", "NemoCrazy87", "hohserg"}
+local whiteList = {"ewwhash", "Chesh1r3", "NemoCrazy87", "hohserg"} --Белый список, другие игроки не смогут использовать телепорт
 
 local function sort(a, b)
     return a.label < b.label
@@ -62,6 +62,7 @@ end
 local function help()
     chat.say("§7Телепорт на точку: §c?tp §bточка§7.")
     chat.say("§7Список точек: §c?list §bстраница§7.")
+    chat.say("§7Добавление точки: §c?addpoint§7.")
     chat.say("§7Обновление точек: §c?update§7.")
 end
 
