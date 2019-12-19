@@ -17,6 +17,13 @@ local function sort(a, b)
     return a.label < b.label
 end
 
+local function sleep(timeout)
+    local deadline = computer.uptime() + timeout
+    repeat
+        computer.pullSignal(deadline - computer.uptime())
+    until computer.uptime() >= deadline
+end
+
 local function garbage(label, slot)
     robot.select(slot)
     chat.say("§7Выкидываю мусор: '§a" .. label .. "§7'...")
@@ -69,7 +76,7 @@ end
 
 local function activate()
     redstone.setOutput(side, 15)
-    os.sleep(.1)
+    sleep(.1)
     redstone.setOutput(side, 0)
 end
 
@@ -100,7 +107,7 @@ local function teleportation(teleport)
                 chat.say("§cНе могу достать распечатку!")
                 counter = 0
             end
-            os.sleep(0)
+            sleep(0)
         end
     end
 
