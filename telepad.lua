@@ -7,7 +7,7 @@ local size = robot.inventorySize()
 local teleports, oldDestination
 
 local symbol, side, bufferSide = "?", 1, 3 --bufferSide только для версий выше 1.7
-local version = "paper" --Версия работы - selector для 1.7, paper - для версией выше 1.7
+local version = "selector" --Версия работы - selector для 1.7, paper - для версией выше 1.7
 local whiteList = {"ewwhash", "Chesh1r3", "NemoCrazy87", "hohserg"} --Белый список, другие игроки не смогут использовать телепорт
 
 local function sort(a, b)
@@ -68,6 +68,7 @@ end
 
 local function activate()
     redstone.setOutput(side, 15)
+    os.sleep(0)
     redstone.setOutput(side, 0)
 end
 
@@ -136,7 +137,7 @@ local function addPoint()
 
             if item then
                 if item.name == "EnderIO:itemCoordSelector" or item.name == "enderio:item_location_printout" then
-                    chat.say("§7Обнаружена новая точка: '§a" .. item.label .. "§7'!")
+                    chat.say("§7Обнаружена новая точка '§a" .. item.label .. "§7'!")
                     scan()
                 else
                     garbage(slot)
