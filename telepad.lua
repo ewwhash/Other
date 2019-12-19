@@ -149,7 +149,6 @@ for user = 1, #whiteList do
     whiteList[whiteList[user]], whiteList[user] = true, nil
 end 
 robot.select(1)
-chat.setName("§eTelepad§7§o")
 scan()
 
 while true do 
