@@ -14,7 +14,20 @@ local size = robot.inventorySize()
 local teleports, allPages, allTeleports, oldlabel = {}, 1, 0
 
 local function sort(a, b)
-    return a.label < b.label
+    return unicode.lower(unicode.sub(a.label, 1, 1)) < unicode.lower(unicode.sub(b.label, 1, 1))
+end
+
+local function sortPages()
+    table.sort(teleports, sort)
+    local allPages, allTeleports = 1, 0
+
+    for teleport = 1, #teleports do 
+        teleports[teleport].page = allPages
+        allTeleports = allTeleports + 1
+        if allTeleports == 8 then 
+            allPages, allTeleports = allPages + 1, 0
+        end
+    end
 end
 
 local function sleep(timeout)
@@ -152,9 +165,9 @@ end
 
 local function addPoint() 
     if magnet.suck() then
-        local changed, slot = event.pull(.3, "inventory_changed")
+        local changed, slot = computer.pullSignal(.3)
 
-        if changed then 
+        if changed == "inventory_changed" then 
             newPoint(slot, true)
         end
     end
@@ -169,7 +182,13 @@ local function eject(label)
             robot.select(teleports[teleport].slot)
             robot.drop(ejectSide)
             robot.select(1)
+            allTeleports = allTeleports - 1
+            if allTeleports == 0 and allPages >= 2 then 
+                allPages = allPages - 1
+                allTeleports = 8
+            end
             table.remove(teleports, teleport)
+            sortPages()
         end
     else
         help()
