@@ -1,4 +1,4 @@
-whiteList = {"ewwhash", "Chesh1r3", "NemoCrazy87", "hohserg"} --Белый список, другие игроки не смогут использовать телепорт
+whiteList = {} --Белый список, другие игроки не смогут использовать телепорт
 symbol = "?" --Префикс команд
 side = 3 --Сторона, в которой стоит телепорт
 bufferSide = 3 --Для версий выше 1.7
@@ -11,7 +11,7 @@ end
 
 local inv, robot, redstone, chat, magnet = proxy("inventory_controller"), proxy("robot"), proxy("redstone"), proxy("chat"), proxy("tractor_beam")
 local size = robot.inventorySize()
-local teleports, allPages, allTeleports, oldlabel = {}, 1, 0
+local teleports, allPages, allTeleports, lastDestination = {}, 1, 0
 
 local function sort(a, b)
     return unicode.lower(unicode.sub(a.label, 1, 1)) < unicode.lower(unicode.sub(b.label, 1, 1))
@@ -49,14 +49,14 @@ local function newPoint(slot, say)
 
     if item then 
         if item.name == "EnderIO:itemCoordSelector" or item.name == "enderio:item_location_printout" then
+            if allTeleports == 8 then
+                allPages, allTeleports = allPages + 1, 0
+            end
             local teleport = #teleports + 1
             teleports[teleport] = {label = item.label, slot = slot}
             teleports[teleport].title = "§f'§a" .. item.label .. "§f'"
             teleports[teleport].page = allPages
             allTeleports = allTeleports + 1
-            if allTeleports == 8 then
-                allPages, allTeleports = allPages + 1, 0
-            end
             table.sort(teleports, sort)
 
             if say then
@@ -151,13 +151,13 @@ local function prepareTeleportation(label)
         local teleport = find(label)
 
         if teleport then
-            oldlabel = label
+            lastDestination = teleport
             teleportation(teleport)
         else 
             help()
         end
-    elseif oldlabel then 
-        teleportation(oldlabel)
+    elseif lastDestination then 
+        teleportation(lastDestination)
     else
         help()
     end
