@@ -1,117 +1,301 @@
-d = component.proxy(component.list("drone")())
+sizeX, sizeZ = 19, 10 --Размеры фермы по X и Z
+height = 2 --Высота над культурой
+wait = 300 --Ожидание в секундах
+waitCharge = 15 --Ожидание зарядки(Если кончится заряд при сборе) в секундах
+waitMove = .1 --Ожидание между блоками(Собиранием культур) в секундах
+backOnCharge = 20 --Процент заряда, при котором идёт возвращение домой
+compass = "SOUTH" --Направление. Т.е NORTH, SOUTH, WEST, EAST
+mode = "SWING" --Режим работы(USE/SWING)
+place = false --Ставить культуру после того как сломал
 
-size_x, size_z = 10, 10 --Размер фермы по X и Z. P.S Учтите, что дрон привязан к глобальной системе координат.
-wait = 300 --Ожидание (в секундах)
-wait_charge = 15 --Ожидание зарядки(Если кончится заряд при СБОРЕ(в секундах))
-procent_go_back = 20 --Процент заряда, при котором идёт возвращение домой
- 
+d, c = component.proxy(component.list("drone")()), computer
+
 status = {
-    collect = {"Сбор\nурожая...", 0xe8e81e},
-    wait = {"Ожидание\n...", 0xffffff},
-    charge = {"Зарядка...", 0x64ea12}
+    collect = {text = "COLLECTING", color = 0xe8e81e},
+    idle = {text = "IDLE", color = 0xffffff},
+    charge = {text = "CHARGING", color = 0x64ea12}
 }
    
 function sleep(timeout)
-    deadline = computer.uptime() + timeout
+    deadline = c.uptime() + timeout
 
     repeat
-        computer.pullSignal(deadline - computer.uptime())
-    until computer.uptime() >= deadline
+        c.pullSignal(deadline - c.uptime())
+    until c.uptime() >= deadline
 end
  
+function slow(timeout) 
+    while d.getOffset() > .5 do 
+        sleep(timeout)
+    end
+end
+
 function move(x, y, z)
-    d.move(x, y, z)
-
-    while d.getOffset() > .5 do
-        sleep(.1)
+    if compass == "NORTH" then
+        d.move(z, y, -x)
+    elseif compass == "SOUTH" then
+        d.move(-z, y, x)
+    elseif compass == "WEST" then 
+        d.move(-x, y, -z)
+    else
+        d.move(x, y, z)
     end
+
+    slow(waitMove)
 end
  
-function go_home()
+function home()
     move(-x, 0, -z)
-    move(0, 0, -2)
+    move(0, -height + 1, -1)
+    slow(2)
 
-    while d.getOffset() > 0 do
-        sleep(.5)
-    end
+    for slot = place and 2 or 1, d.inventorySize() do
+        d.select(slot)
 
-    for i = 1, d.inventorySize() do
-        d.select(i)
-        d.drop(0)
+        while not d.drop(0) do 
+            if d.count(slot) == 0 then 
+                break 
+            end 
+        end 
     end
 
     d.select(1)
     move(0, -1, 1)
 end
  
-function go_back()
-    move(0, 1, 1)
-    move(x, 0, z)
+function back()
+    move(x, height, z)
 end
- 
-function check_energy()
-    if computer.energy() <= procent_go_back * (computer.maxEnergy() / 100) then
-        go_home()
-        d.setStatusText(status.charge[1])
-        d.setLightColor(status.charge[2])
-        sleep(wait_charge)
-        if computer.energy() <= procent_go_back * (computer.maxEnergy() / 100) then
-            d.setStatusText("Кончилась\nЭнергия")
-            computer.shutdown()
+
+function start(left)
+    move(1, height, 1)
+    collect()
+end
+
+function checkEnergy()
+    if c.energy() <= backOnCharge * (c.maxEnergy() / 100) then
+        home()
+        d.setStatusText(status.charge.text)
+        d.setLightColor(status.charge.color)
+        sleep(waitCharge)
+
+        if c.energy() <= backOnCharge * (c.maxEnergy() / 100) then
+            d.setStatusText("OUT OF\nENERGY")
+            c.shutdown()
         else
-            d.setStatusText(status.collect[1])
-            d.setLightColor(status.collect[2])
-            go_back()
+            d.setStatusText(status.collect.text)
+            d.setLightColor(status.collect.color)
+            back()
         end
     end
 end
  
-function check_count()
+function checkFreeSpace()
     if d.count(d.inventorySize()) >= 1 then
-        go_home()
-        go_back()
+        home()
+        back()
     end
 end
  
-function stuff()
+function collect()
+    slow(.5)
     if d.detect(0) then
-        d.use(0)
+        if mode == "SWING" then
+            d.swing(0)
+        else
+            d.use(0)
+        end
     end
-    check_count()
-    check_energy()
+
+    if place then
+        d.place(0)
+    end
+    checkFreeSpace()
+    checkEnergy()
 end
  
-function farm()
-    d.setStatusText(status.collect[1])
-    d.setLightColor(status.collect[2])
-    x, z = 1, 0
-    move(1, 1, 1)
-    stuff()
+function main()
+    d.setStatusText(status.collect.text)
+    d.setLightColor(status.collect.color)
+
+    x, z, farm = 1, 1, 1
+    start()
 
     while true do
-        if x == 1 and z + 1 == size_z or x == size_x and z + 1 == size_z then
-            go_home()
+        if x == 1 and z == sizeZ or x == sizeX and z == sizeZ then
+            home()
             break
-        elseif x == size_x or x == 1 and z > 0 then
+        elseif x == sizeX or x == 1 and z > 1 then
             z = z + 1
             move(0, 0, 1)
-            stuff()
+            collect()
         end
-        if z % 2 == 0 then
+        if z % 2 == 1 then
             move(1, 0, 0)
             x = x + 1
         else
             move(-1, 0, 0)
             x = x - 1
         end
-        stuff()
+
+        collect()
     end
 
-    d.setStatusText(status.wait[1])
-    d.setLightColor(status.wait[2])
+    d.setStatusText(status.idle.text)
+    d.setLightColor(status.idle.color)
 end
  
 while true do
-    farm()
+    main()
+    sleep(wait)
+endsizeX, sizeZ = 19, 10 --Размеры фермы по X и Z
+height = 2 --Высота над культурой
+wait = 300 --Ожидание в секундах
+waitCharge = 15 --Ожидание зарядки(Если кончится заряд при сборе) в секундах
+waitMove = .1 --Ожидание между блоками(Собиранием культур) в секундах
+backOnCharge = 20 --Процент заряда, при котором идёт возвращение домой
+compass = "SOUTH" --Направление. Т.е NORTH, SOUTH, WEST, EAST и т.д
+mode = "SWING" --Режим работы(USE/SWING)
+place = false
+
+d, c = component.proxy(component.list("drone")()), computer
+
+status = {
+    collect = {text = "COLLECTING", color = 0xe8e81e},
+    idle = {text = "IDLE", color = 0xffffff},
+    charge = {text = "CHARGING", color = 0x64ea12}
+}
+   
+function sleep(timeout)
+    deadline = c.uptime() + timeout
+
+    repeat
+        c.pullSignal(deadline - c.uptime())
+    until c.uptime() >= deadline
+end
+ 
+function slow(timeout) 
+    while d.getOffset() > .5 do 
+        sleep(timeout)
+    end
+end
+
+function move(x, y, z)
+    if compass == "NORTH" then
+        d.move(z, y, -x)
+    elseif compass == "SOUTH" then
+        d.move(-z, y, x)
+    elseif compass == "WEST" then 
+        d.move(-x, y, -z)
+    else
+        d.move(x, y, z)
+    end
+
+    slow(waitMove)
+end
+ 
+function home()
+    move(-x, 0, -z)
+    move(0, -height + 1, -1)
+    slow(2)
+
+    for slot = place and 2 or 1, d.inventorySize() do
+        d.select(slot)
+
+        while not d.drop(0) do 
+            if d.count(slot) == 0 then 
+                break 
+            end 
+        end 
+    end
+
+    d.select(1)
+    move(0, -1, 1)
+end
+ 
+function back()
+    move(x, height, z)
+end
+
+function start(left)
+    move(1, height, 1)
+    collect()
+end
+
+function checkEnergy()
+    if c.energy() <= backOnCharge * (c.maxEnergy() / 100) then
+        home()
+        d.setStatusText(status.charge.text)
+        d.setLightColor(status.charge.color)
+        sleep(waitCharge)
+
+        if c.energy() <= backOnCharge * (c.maxEnergy() / 100) then
+            d.setStatusText("OUT OF\nENERGY")
+            c.shutdown()
+        else
+            d.setStatusText(status.collect.text)
+            d.setLightColor(status.collect.color)
+            back()
+        end
+    end
+end
+ 
+function checkFreeSpace()
+    if d.count(d.inventorySize()) >= 1 then
+        home()
+        back()
+    end
+end
+ 
+function collect()
+    slow(.5)
+    if d.detect(0) then
+        if mode == "SWING" then
+            d.swing(0)
+        else
+            d.use(0)
+        end
+    end
+
+    if place then
+        d.place(0)
+    end
+    checkFreeSpace()
+    checkEnergy()
+end
+ 
+function main()
+    d.setStatusText(status.collect.text)
+    d.setLightColor(status.collect.color)
+
+    x, z, farm = 1, 1, 1
+    start()
+
+    while true do
+        if x == 1 and z == sizeZ or x == sizeX and z == sizeZ then
+            home()
+            break
+        elseif x == sizeX or x == 1 and z > 1 then
+            z = z + 1
+            move(0, 0, 1)
+            collect()
+        end
+        if z % 2 == 1 then
+            move(1, 0, 0)
+            x = x + 1
+        else
+            move(-1, 0, 0)
+            x = x - 1
+        end
+
+        collect()
+    end
+
+    d.setStatusText(status.idle.text)
+    d.setLightColor(status.idle.color)
+end
+ 
+while true do
+    main()
     sleep(wait)
 end
