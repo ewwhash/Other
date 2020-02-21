@@ -86,5 +86,5 @@ while true do
         end
     end
 
-    os.sleep(0)
+    os.sleep(5)
 end
