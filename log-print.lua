@@ -39,13 +39,13 @@ end
 local function updateFilename()
     local correction, timestamp, code, message, headers = 0, getTimestamp(logTimezone)
 
-    for for correction=0, 1800, 100 do
+    for correction= -1700, 1700, 1700 do
         filename = os.date("%d-%m-%Y.txt", timestamp - correction)
         code, message, headers = select(2, request(link .. filename, nil, nil, "HEAD"))
 
         if code and code == 200 then
             break
-        elseif correction >= 1800 then
+        elseif correction >= 1700 then
             error("Error on attempt get new file name " .. tostring(code) .. " " .. tostring(message))
         end
     end
