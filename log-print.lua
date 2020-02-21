@@ -43,17 +43,13 @@ local function updateFilename()
         filename = os.date("%d-%m-%Y.txt", timestamp - correction)
         code, message, headers = select(2, request(link .. filename, nil, nil, "HEAD"))
 
-        if code then
-            if code == 200 then
-                break
-            else
-                if correction >= 1800 then
-                    error("Error on attempt get new file name " .. tostring(code) .. " " .. tostring(message))
-                end
-                correction = correction + 100
-            end
+        if code and code == 200 then
+            break
         else
-            error("Web server is down!")
+            if correction >= 1800 then
+                error("Error on attempt get new file name " .. tostring(code) .. " " .. tostring(message))
+            end
+            correction = correction + 100
         end
     end
 
@@ -73,20 +69,24 @@ while true do
         updateVariables() 
     end
 
-    local code, message, headers = select(2, request(fullLink, nil, nil, "HEAD"))
+    for i = 1, 5 do 
+        local code, message, headers = select(2, request(fullLink, nil, nil, "HEAD"))
 
-    if code and code == 200 then
-        if eTag ~= headers["ETag"][1] then
-            local data, code, message, headers = request(fullLink, nil, {Range = ("bytes=%d-"):format(readed)})
+        if code and code == 200 then
+            if eTag ~= headers["ETag"][1] then
+                local data, code, message, headers = request(fullLink, nil, {Range = ("bytes=%d-"):format(readed)})
 
-            if data ~= "" then
-                readed, eTag = readed + #data, headers["ETag"][1]
-                local formatted = data:gsub("%d+:%d+:%d+", os.date("%H:%M:%S", getTimestamp(userTimezone)))
-                io.write(formatted)
+                if data ~= "" then
+                    readed, eTag = readed + #data, headers["ETag"][1]
+                    local formatted = data:gsub("%d+:%d+:%d+", os.date("%H:%M:%S", getTimestamp(userTimezone)))
+                    io.write(formatted)
+                end
             end
+
+            break
+        elseif i == 5 then
+            error("Web server is down!")
         end
-    else
-        error("Web server is down!")
     end
 
     os.sleep(5)
