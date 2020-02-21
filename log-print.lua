@@ -12,6 +12,11 @@ local internet = component.internet
 local readed, eTag = 0
 local fullLink, filename, nextUpdate
 local w, h = gpu.getResolution()
+local corrList = {
+    1 = 0,
+    2 = -1700,
+    3 = 1700
+}
 
 local function getTimestamp(timezone)
 	local file = io.open("/tmp/time", "w")
@@ -39,7 +44,8 @@ end
 local function updateFilename()
     local correction, timestamp, code, message, headers = 0, getTimestamp(logTimezone)
 
-    for correction= -1700, 1700, 1700 do
+    for i = 1, 3 do
+        correction = corrList[i]
         filename = os.date("%d-%m-%Y.txt", timestamp - correction)
         code, message, headers = select(2, request(link .. filename, nil, nil, "HEAD"))
 
@@ -86,5 +92,5 @@ while true do
         end
     end
 
-    os.sleep(5)
+    os.sleep(0)
 end
