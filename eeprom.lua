@@ -169,7 +169,7 @@ end
 local boot, addBootCandidate, menu =
 
 function(proxy, file, prettyViewFile)
-    status(bootFrom(proxy, prettyViewFile, true), False, .5)
+    status(bootFrom(proxy, prettyViewFile, 1), False, .5)
 
     if eepromGetData() ~= proxy.address then
         eepromSetData(proxy.address)
