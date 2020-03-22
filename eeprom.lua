@@ -1,9 +1,10 @@
+@ -1,211 +1 @@
 
-local bootFiles, Component, Computer, Table, Background, Foreground, white, bootCandidates, False, gpuAndScreen, width, height, centerY = {
+local bootFiles, Component, Computer, Table, Math, Background, Foreground, white, bootCandidates, False, gpuAndScreen, width, height, centerY = {
     "/init.lua"
-}, component, computer, table, 0x062b34, 0x839ea9, 0xffffff
+}, component, computer, table, math, 0x002b36, 0x8cb9c5, 0xffffff
 
-local componentProxy, componentList, computerPullSignal, mathHuge, mathCeil, tableInsert = Component.proxy, Component.list, Computer.pullSignal, math.huge, math.ceil, Table.insert
+local componentProxy, componentList, computerPullSignal, computerUptime, mathHuge, mathCeil, tableInsert = Component.proxy, Component.list, Computer.pullSignal, computer.uptime, Math.huge, Math.ceil, Table.insert
 
 local function proxy(componentType)
     local address = componentList(componentType)()
@@ -12,25 +13,20 @@ end
 
 local gpu, eeprom, internet, screen, tmpfs = proxy"gp" or {}, proxy"pr", proxy"in", proxy"sc", componentProxy(Computer.tmpAddress())
 local gpuSetBackground, gpuSetForeground, eepromGetData, eepromSetData, computerShutdown = gpu.setBackground, gpu.setForeground, eeprom.getData, eeprom.setData, computer.shutdown
+computer.getBootAddress = eepromGetData
+computer.setBootAddress = eepromSetData
 
 if gpuSetBackground and screen then
     gpu.bind((componentList"sc"()))
     gpuAndScreen, width, height = 1, gpu.maxResolution()
     centerY = height / 2
+    gpu.setPalleteColor(9, 0x002b36)
     gpu.setResolution(width, height)
-end
-
-computer.getBootAddress = function()
-    return eepromGetData()
-end
-
-computer.setBootAddress = function(address)
-    eepromSetData(address)
 end
 
 local request, execute, read =
 
-function(...) -- request()
+function(...)
     if internet then
         local handle, data, chunk = internet.request(...), ""
 
@@ -51,7 +47,7 @@ function(...) -- request()
     end
 end,
 
-function(...) -- execute()
+function(...)
 	local chunk, err = load(...)
 
 	if not chunk and err then
@@ -67,7 +63,7 @@ function(...) -- execute()
 	end
 end,
 
-function(proxy, file) -- read()
+function(proxy, file)
     local handle, data, chunk = proxy.open(file, "r"), ""
 
     if handle then
@@ -83,7 +79,7 @@ function(proxy, file) -- read()
     end
 end
 
-local set, fill =
+local set, fill, getCenterX =
 
 function(x, y, str, background, foreground)
     gpuSetBackground(background or Background)
@@ -97,14 +93,36 @@ function(x, y, width, height, symbol, background, foreground)
     gpu.fill(x, y, width, height, symbol)
 end
 
-local clear, center = 
+function(len)
+    return mathCeil(width / 2 - len / 2)
+end
 
-function() -- clear()
+local clear, center, sleep, bootFrom = 
+
+function()
     fill(1, 1, width, height, " ", 0x002b36)
 end,
 
-function(y, str, background, foreground) -- center()
-    set(mathCeil(width / 2 - unicode.len(str) / 2), y, str, background, foreground)
+function(y, str, background, foreground)
+    set(getCenterX(unicode.len(str) / 2), y, str, background, foreground)
+end,
+
+function(timeout, breakCode, onBreak)
+    local deadline = computerUptime() + (timeout or 0)
+    repeat
+        local signal = {computerPullSignal(deadline - computerUptime())}
+
+        if signal[1] == "key_down" and (breakCode == 0 or signal[4] == breakCode) then
+            if onBreak then
+                onBreak()
+            end
+            break
+        end
+    until computerUptime() >= deadline
+end,
+
+function(proxy, file, alreadyBooting)
+    return("Boot%s %s from %s (%s)"):format(alreadyBooting and "ing" or "", file, proxy.getLabel() or "undefined", proxy.address)
 end
 
 local function status(str, title, wait, breakCode, onBreak)
@@ -127,16 +145,7 @@ local function status(str, title, wait, breakCode, onBreak)
             y = y + 1
         end
 
-        while wait do
-            local signal = {computerPullSignal(wait)}
-
-            if signal[1] == "key_down" and (not breakCode or signal[4] == breakCode) then
-                if onBreak then
-                    onBreak()
-                end
-                wait = False
-            end
-        end
+        sleep(wait, breakCode, onBreak)
     end
 end
 
@@ -150,14 +159,14 @@ end
 
 local boot, addBootCandidate =
 
-function(proxy, file) -- boot()
-    status("Booting from " .. (proxy.getLabel() or "Undefined") .. "...")
+function(proxy, file, prettyViewFile) -- boot()
+    status(bootFrom(proxy, prettyViewFile))
 
     if eepromGetData() ~= proxy.address then
         eepromSetData(proxy.address)
     end
 
-    local success, err = execute(read(proxy, file), "=" .. file:gsub("/", ""))
+    local success, err = execute(read(proxy, file), "=" .. prettyViewFile)
 
     if success then
         return 1
@@ -174,7 +183,7 @@ function(address) -- addBootCandidate()
 
         for i = 1, #bootFiles do
             if proxy.exists(bootFiles[i]) then
-                tableInsert(bootCandidates, {proxy, bootFiles[i]})
+                tableInsert(bootCandidates, {proxy, bootFiles[i], bootFiles[i]:gsub("/", "", 1)})
             end
         end
     end
@@ -193,19 +202,9 @@ end
 
 updateCandidates()
 clear()
-center(centerY - 5, "Select OS to boot", False, white)
-fill(width / 2 - 4, centerY, 8, 3, " ", 0x303435)
-set(width / 2 - 3, centerY + 1, "OpenOS", 0x303435)
-
-while 1 do
-    local signal = {computerPullSignal()}
-
-    if signal[1] == "key_down" then
-    end
-end
 
 if #bootCandidates >= 1 then
-    boot(bootCandidates[1][1], bootCandidates[1][2])
+    boot(bootCandidates[1][1], bootCandidates[1][2], bootCandidates[1][3])
 else
     Error("No bootable medium found")
 end

@@ -3,7 +3,8 @@
         "len",
         "unicode",
         "socket",
-        "bit32"
+        "bit32",
+        "checkArg"
     ],
     "Lua.diagnostics.disable": [
         "lowercase-global"
