@@ -13,9 +13,9 @@ local readed, eTag = 0
 local fullLink, filename, nextUpdate
 local w, h = gpu.getResolution()
 local corrList = {
-    1 = 0,
-    2 = -1700,
-    3 = 1700
+    [1] = 0,
+    [2] = -1700,
+    [3] = 1700
 }
 
 local function getTimestamp(timezone)

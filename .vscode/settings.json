@@ -1,0 +1,11 @@
+{
+    "Lua.diagnostics.globals": [
+        "len",
+        "unicode",
+        "socket",
+        "bit32"
+    ],
+    "Lua.diagnostics.disable": [
+        "lowercase-global"
+    ]
+}

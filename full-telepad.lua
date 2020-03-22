@@ -1,9 +1,9 @@
-whiteList = {} --Белый список, другие игроки не смогут использовать телепорт
-symbol = "?" --Префикс команд
-side = 3 --Сторона, в которой стоит телепорт
-bufferSide = 3 --Для версий выше 1.7
-ejectSide = 1 --Сторона, из которой будут извлекаться точки
-version = "selector" --Версия работы - selector для 1.7, paper - для версий выше 1.7
+local whiteList = {} -- Белый список, другие игроки не смогут использовать телепорт
+local symbol = "?" -- Префикс команд
+local side = 3 -- Сторона, в которой стоит телепорт
+local bufferSide = 3 -- Для версий выше 1.7
+local ejectSide = 1 -- Сторона, из которой будут извлекаться точки
+local version = "selector" --В ерсия работы - selector для 1.7, paper - для версий выше 1.7
 
 local function proxy(componentType)
     return component.proxy(component.list(componentType)())
