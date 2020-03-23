@@ -99,7 +99,7 @@ function(len)
     return mathCeil(width / 2 - len / 2)
 end
 
-local clear, center, sleep, bootFrom, elementsLen, checkAction = 
+local clear, center, sleep, bootFrom, elementsLen, checkAction =
 
 function()
     fill(1, 1, width, height, " ", Background)
@@ -149,7 +149,9 @@ function(action, Self)
     end
 end
 
-local function status(str, title, wait, breakCode, onBreak)
+local status, input = 
+
+function(str, title, wait, breakCode, onBreak)
     if gpuAndScreen then
         local lines = {}
 
@@ -171,9 +173,46 @@ local function status(str, title, wait, breakCode, onBreak)
 
         return sleep(wait, breakCode, onBreak)
     end
+end,
+
+function()
+    function(y, center, prefix)
+        local input, keys = "", {}
+        local prefixLen, draw = unicodeLen(prefix or ""),
+    
+        function()
+            fill(1, y, width, 1, " ", Background)
+            if center then
+                center(y, prefix .. input)
+            else
+                set(1, y, input)
+            end
+        end
+    
+        while 1 do
+            local signal = {computerPullSignal()}
+    
+            if signal[1] == keyDown then
+                keys[signal[4]] = 1
+                if keys[29] and keys[46] then
+                    return False
+                elseif signal[3] >= 32 and unicodeLen(input) < width - 1 - prefix then
+                    input = input .. unicode.char(signal[3])
+                    draw()
+                elseif signal[4] == 14 then
+                    input = unicode.sub(input, 1, unicodeLen(input))
+                    draw()
+                elseif signal[4] == 28 then
+                    return input
+                end 
+            elseif signal[1] == "key_up" then
+                keys[signal[4]] = False
+            end
+        end
+    end
 end
 
-local Error, candidateSelected = 
+local Error, candidateSelected, input =
 
 function(err)
     if gpuAndScreen then
@@ -186,7 +225,7 @@ end,
 function(options, selected, bootables)
     local proxy = bootCandidates[selected][1]
     local readOnly = proxy.isReadOnly()
-    options.e[4], options.e[5] = {t = "Rename"}, not readOnly and {t = "Format", a = function() proxy.remove("/") bootables:d() end} or False
+    options.e[4], options.e[5] = {t = "Rename", a = function()  end}, not readOnly and {t = "Format", a = function() proxy.remove("/") bootables:d() end} or False
     fill(1, centerY + 5, width, 3, " ", Background)
     center(centerY + 5, bootFrom(bootCandidates[selected]), False, white)
     center(centerY + 7, ("Disk usage %s%% %s"):format(math.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "R/O" or "R/W"))
@@ -232,7 +271,7 @@ end,
 function(elements, y, drawSelectedItem, border, onArrowKeyUpOrDown)
     return {
         o = drawSelectedItem,
-        a = onArrowKeyUpOrDown, 
+        a = onArrowKeyUpOrDown,
         e = elements,
         s = 1,
         d = function(Self)
