@@ -124,7 +124,12 @@ function(timeout, breakCode, onBreak)
 end,
 
 function(bootImage, alreadyBooting)
-    return("Boot%s %s from %s (%s)"):format(alreadyBooting and "ing" or "", bootImage[4], bootImage[2], alreadyBooting and bootImage[5] or unicodeSub(bootImage[5], 1, 3) .. "…")
+    local address = alreadyBooting and bootImage[3] or unicodeSub(bootImage[3], 1, 3) .. "…"
+    if bootImage[4] then
+        return("Boot%s %s from %s (%s)"):format(alreadyBooting and "ing" or "", bootImage[5], bootImage[2], address)
+    else
+        return("Boot from %s (%s) is not available"):format(bootImage[2], address)
+    end
 end,
 
 function(elements, border)
@@ -132,7 +137,7 @@ function(elements, border)
 
     for i = 1, #elements do
         local len = unicodeLen(elements[i].t)
-        allLen, elements[i].l = allLen + len + (i == #elements and 0 or (border == 1 and 8 or 10)), len
+        allLen, elements[i].l = allLen + len + (i == #elements and 0 or (border == 1 and 6 or 8)), len
     end
 
     return allLen
@@ -179,28 +184,30 @@ function(err)
 end,
 
 function(options, selected)
-    options.e[4], options.e[5] = {t = "Rename"}, {t = "Format"}
-    fill(1, centerY + 6, width, 3, " ", Background)
-    center(centerY + 6, bootFrom(bootCandidates[selected]), False, white)
-    center(centerY + 8, "Disk usage ")
-    options:d()
+    local proxy = bootCandidates[selected][1]
+    local readOnly = proxy.isReadOnly()
+    options.e[4], options.e[5], options.s = {t = "Rename"}, not readOnly and {t = "Format", a = function() proxy.remove("/") options:d() end} or False, options.s == 5 and 4 or options.s
+    center(centerY + 5, bootFrom(bootCandidates[selected]), False, white)
+    center(centerY + 7, ("Disk usage %s%% %s"):format(math.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "R/O" or "R/W"))
 end
 
 local boot, addBootCandidate, createElements =
 
 function(bootImage)
-    status(bootFrom(bootImage, 1), False, .5)
+    if bootImage[4] then
+        status(bootFrom(bootImage, 1), False, .5)
 
-    if eepromGetData() ~= bootImage[5] then
-        eepromSetData(bootImage[5])
-    end
+        if eepromGetData() ~= bootImage[3] then
+            eepromSetData(bootImage[3])
+        end
 
-    local success, err = execute(read(bootImage[1], bootImage[3]), "=" .. bootImage[4])
+        local success, err = execute(read(bootImage[1], bootImage[4]), "=" .. bootImage[4])
 
-    if success then
-        return 1
-    else
-        Error(err)
+        if success then
+            return 1
+        else
+            Error(err)
+        end
     end
 end,
 
@@ -208,37 +215,39 @@ function(address)
     local proxy = select(2, pcall(componentProxy, address))
 
     if proxy then
-        tableInsert(bootCandidates, {proxy, proxy.getLabel() or "undefined", address, bootFiles[i], bootFiles[i]:gsub("/", "", 1)})
+        tableInsert(bootCandidates, {proxy, proxy.getLabel() or "undefined", address})
 
         for i = 1, #bootFiles do
             if proxy.exists(bootFiles[i]) then
-                tableInsert(bootCandidates, {proxy, proxy.getLabel() or "undefined", bootFiles[i], bootFiles[i]:gsub("/", "", 1), address})
+                bootCandidates[#bootCandidates][4] = bootFiles[i]
+                bootCandidates[#bootCandidates][5] = bootFiles[i]:gsub("/", "", 1)
                 break
             end
         end
     end
 end,
 
-function(elements, y, selected, border, onArrowKeyUpOrDown)
+function(elements, y, drawSelectedItem, border, onArrowKeyUpOrDown)
     return {
+        o = drawSelectedItem,
         a = onArrowKeyUpOrDown, 
-        w = 1,
         e = elements,
-        s = selected or 0,
+        s = 1,
         d = function(Self)
+            fill(1, 1, width, height - 1, " ", Background)
+            checkAction(Self.e[Self.s].d, Self)
             local x, bigBorder = getCenterX(elementsLen(Self.e, border)), border == 1 and 1
-            x = bigBorder and x or x - 1
-            fill(1, y - (bigBorder and 1 or 0), width, (bigBorder and 3 or 1), " ")
+            print(#Self.e)
 
             for i = 1, #Self.e do
-                local selectedItem = i == Self.s and gray
+                local selectedItem = Self.o and (i == Self.s and gray)
 
                 if selectedItem then
                     fill(x - 3, y - (bigBorder and 1 or 0), Self.e[i].l + 6, (bigBorder and 3 or 1), " ", selectedItem)
                 end
 
                 set(x, y, Self.e[i].t, selectedItem, Foreground)
-                x = x + Self.e[i].l + (bigBorder and 8 or 10)
+                x = x + Self.e[i].l + (bigBorder and 6 or 8)
             end
         end
     }
@@ -256,23 +265,20 @@ end
 
 local function main()
     local bootables, options
-    bootables, options = createElements({}, centerY - 2, 1, 1, function() options.s, selectedElement = mathCeil(#options.e / 2) , options options:d() end)
+    bootables, options = createElements({}, centerY - 2, 1, 1, function() options.o, options.s, bootables.o = 1, options.s or mathCeil(#options.e / 2), False selectedElement = options bootables:d() options:d() end)
     for i = 1, #bootCandidates do
         local label = bootCandidates[i][2]
         if unicodeLen(label) > 8 then
             label = unicodeSub(label, 1, 6) .. "…"
         end
-        tableInsert(bootables.e, {t = label, a = function(Self) boot(bootCandidates[Self.s]) end, o = function(Self) candidateSelected(options, Self.s) end})
+        tableInsert(bootables.e, {t = label, a = function(Self) boot(bootCandidates[Self.s]) end, d = function(Self) print(Self.s, Self.e[1].t) candidateSelected(options, Self.s) end})
     end
     options, selectedElement = createElements({
         {t = "Power Off", a = computerShutdown},
         {t = "Shell"},
         {t = "Recovery"},
-    }, centerY + (#bootCandidates >= 1 and 2 or 0), 0, 0, function() selectedElement = bootables options:d() bootables:d() end), bootables
+    }, centerY + (#bootCandidates >= 1 and 2 or 0), False, 0, function() options.o, bootables.o = False, 1 selectedElement = bootables bootables:d() options:d() end), bootables
     clear()
-    if #bootCandidates >= 1 then
-        candidateSelected(options, 1)
-    end
     center(height, "Use ← ↑ → keys to move cursor; Enter to do something; F5 to refresh")
     bootables:d()
     options:d()
@@ -288,15 +294,13 @@ if status("Press S to stay in bootloader", False, 1, 31) then
             if signal[4] == 203 and selectedElement.s > 1 then
                 selectedElement.s = selectedElement.s - 1
                 selectedElement:d()
-                checkAction(selectedElement.e[selectedElement.s].o, selectedElement)
             elseif signal[4] == 205 and selectedElement.s < #selectedElement.e then
                 selectedElement.s = selectedElement.s + 1
                 selectedElement:d()
-                checkAction(selectedElement.e[selectedElement.s].o, selectedElement)
             elseif signal[4] == 200 then
-                checkAction(selectedElement.a, selectedElement, 1)
+                checkAction(selectedElement.a, selectedElement)
             elseif signal[4] == 208 then
-                checkAction(selectedElement.a, selectedElement, False)
+                checkAction(selectedElement.a, selectedElement)
             elseif signal[4] == 63 then
                 updateCandidates()
                 main()
