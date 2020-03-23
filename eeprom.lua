@@ -12,10 +12,10 @@ end
 
 local gpu, eeprom, internet, screen, tmpfs = proxy"gp" or {}, proxy"pr", proxy"in", proxy"sc", componentProxy(Computer.tmpAddress())
 local gpuSetBackground, gpuSetForeground, gpuSetPaletteColor, eepromGetData, eepromSetData = gpu.setBackground, gpu.setForeground, gpu.setPaletteColor, eeprom.getData, eeprom.setData
-computer.getBootAddress = eepromGetData
-computer.setBootAddress = eepromSetData
+Computer.getBootAddress = eepromGetData
+Computer.setBootAddress = eepromSetData
 computerShutdown = function()
-    computer.shutdown()
+    Computer.shutdown()
 end
 
 if gpuSetBackground and screen then
@@ -53,7 +53,7 @@ function(traceback, code, stdin, env)
     local chunk, err = Load("return " .. code, stdin, False, env)
     
     if not chunk then
-        chunk, err = Load(code, stdin)
+        chunk, err = Load(code, stdin, False, env)
     end
 
 	if not chunk and err then
@@ -64,7 +64,7 @@ function(traceback, code, stdin, env)
         if traceback then
             data = tablePack(xpcall(chunk, debug.traceback))
         else
-            data = tablePack(pcall(chunk))
+            data = tablePack(Pcall(chunk))
         end
 
         if data[1] then
@@ -165,7 +165,7 @@ function(label)
     return not label and label or unicodeLen(label) > 8 and unicodeSub(label, 1, 6) .. "…" or label
 end
 
-local status, input, PRINT =
+local status, input, print =
 
 function(text, title, wait, breakCode, onBreak)
     if gpuAndScreen then
@@ -192,46 +192,64 @@ function(text, title, wait, breakCode, onBreak)
 end,
 
 function(y, centrize, prefix)
-    local input, keys, cursorState = "", {}, 1
-    local prefixLen, draw = unicodeLen(prefix or ""),
+    local input, keys, cursorState, cursorPos, prefixLen, x, allLen, cursorX = "", {}, 1, 1, unicodeLen(prefix or ""), 1
 
-    function()
-        local text = prefix .. input .. (cursorState and "█" or " ")
-        fill(1, y, width, 1, " ")
-        if centrize then
-            center(y, text, Background, white)
-        else
-            set(1, y, text, Background, white)
+    local function cursorBlink(force)
+        if allLen < width then
+            cursorState, cursorX = force or not cursorState, x + prefixLen + cursorPos - 1
+            set(cursorX, y, gpu.get(cursorX, y), cursorState and white or Background, cursorState and gray or white)
         end
     end
 
+    local function draw()
+        local text = prefix .. input
+        allLen = unicodeLen(text)
+        fill(1, y, width, 1, " ")
+        if centrize then
+            x = getCenterX(allLen)
+            cursorX = x + prefixLen
+            set(x, y, text, Background, white)
+        else
+            set(1, y, text, Background, white)
+        end
+        cursorBlink(1)
+    end
+
     draw()
+
     while 1 do
-        local signal = {computerPullSignal(.8)}
+        local signal = {computerPullSignal(.6)}
 
         if signal[1] == keyDown then
             keys[signal[4]] = 1
-            if signal[3] >= 32 and unicodeLen(input) < width - 2 - prefixLen then
-                input, cursorState = input .. unicode.char(signal[3]), 1
+            if signal[3] >= 32 and unicodeLen(input) < width - prefixLen - 1 then
+                input, cursorState, cursorPos = unicodeSub(input, 1, cursorPos - 1) .. Unicode.char(signal[3]) .. unicodeSub(input, cursorPos, -1), 1, cursorPos + 1
                 draw()
-            elseif signal[4] == 14 then
-                input, cursorState = unicode.sub(input, 1, unicodeLen(input) - 1), 1
+            elseif signal[4] == 14 and #input > 0 then
+                input, cursorState, cursorPos = unicodeSub(unicodeSub(input, 1, cursorPos - 1), 1, -2) .. unicodeSub(input, cursorPos, -1), 1, cursorPos - 1
                 draw()
             elseif signal[4] == 28 then
                 fill(1, y, width, 1, " ")
                 return input
+            elseif signal[4] == 203 and cursorPos > 1 then
+                cursorPos, cursorState = cursorPos - 1, 1
+                draw()
+            elseif signal[4] == 205 and cursorPos < allLen - prefixLen + 1 then
+                cursorPos, cursorState = cursorPos + 1, 1
+                draw()
             elseif keys[29] and keys[46] then
                 fill(1, y, width, 1, " ")
                 return False
+            else
+                cursorBlink(1)
             end
         elseif signal[1] == "key_up" then
             keys[signal[4]] = False
         elseif signal[1] == "clipboard" then
-            input = input .. signal[3]
+            input, cursorPos = input .. signal[3], cursorPos + unicodeLen(signal[3])
             draw()
         else
-            cursorState = not cursorState
-            draw()
+            cursorBlink()
         end
     end
 end,
@@ -345,7 +363,7 @@ local function main()
             local readOnly = proxy.isReadOnly()
             fill(1, centerY + 5, width, 3, " ")
             center(centerY + 5, bootFrom(bootCandidates[Self.s]), False, white)
-            center(centerY + 7, ("Disk usage %s%% %s"):format(math.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "R/O" or "R/W"))
+            center(centerY + 7, ("Disk usage %s%% %s"):format(Math.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "R/O" or "R/W"))
 
             options.e[4], options.e[5] = {t = "Rename", a =
             function()
@@ -372,14 +390,16 @@ local function main()
             function()
 
                 clear()
+                local env = setmetatable({
+                    print = print,
+                    proxy = proxy
+                }, {__index = _G})
+
                 ::loop::
                     local code = input(height, False, "> ")
 
                     if code then
-                        local success, data = execute(False, code, "=stdin", setmetatable({
-                            PRINT = PRINT,
-                            proxy = proxy
-                        }, {__index = _G}))
+                        local success, data = execute(False, code, "=stdin", env)
 
                         if success then
                             if data.n > 0 then
@@ -387,10 +407,10 @@ local function main()
                                     data[i] = tostring(data[i])
                                 end
 
-                                PRINT(tableConcat(data, "    "))
+                                print(tableConcat(data, "    "))
                             end
                         else
-                            PRINT(data)
+                            print(data)
                         end
                     goto loop
                 end
