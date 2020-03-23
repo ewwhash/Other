@@ -1,9 +1,9 @@
-local bootFiles, Component, Computer, Table, Math, Unicode, Background, Foreground, white, gray, keyDown, bootCandidates, False, gpuAndScreen, width, height, centerY, computerShutdown, selectedElement = {
+local bootFiles, Component, Computer, Table, Math, Unicode, Pcall, Load, Background, Foreground, white, gray, keyDown, undefined, bootCandidates, False, gpuAndScreen, width, height, centerY, computerShutdown, selectedElement = {
     "/init.lua",
     "/OS.lua"
-}, component, computer, table, math, unicode, 0x002b36, 0x8cb9c5, 0xffffff, 0x292929, "key_down"
+}, component, computer, table, math, unicode, pcall, load, 0x002b36, 0x8cb9c5, 0xffffff, 0x292929, "key_down", "undefined"
 
-local componentProxy, componentList, computerPullSignal, computerUptime, mathHuge, mathCeil, tableInsert, unicodeLen, unicodeSub = Component.proxy, Component.list, Computer.pullSignal, computer.uptime, Math.huge, Math.ceil, Table.insert, Unicode.len, Unicode.sub
+local componentProxy, componentList, computerPullSignal, computerUptime, mathHuge, mathCeil, tableInsert, tablePack, tableConcat, unicodeLen, unicodeSub = Component.proxy, Component.list, Computer.pullSignal, computer.uptime, Math.huge, Math.ceil, Table.insert, Table.pack, Table.concat, Unicode.len, Unicode.sub
 
 local function proxy(componentType)
     local address = componentList(componentType)()
@@ -49,19 +49,31 @@ function(...)
     end
 end,
 
-function(...)
-	local chunk, err = load(...)
+function(traceback, code, stdin, env)
+    local chunk, err = Load("return " .. code, stdin, False, env)
+    
+    if not chunk then
+        chunk, err = Load(code, stdin)
+    end
 
 	if not chunk and err then
 		return False, err
 	else
-		local data = {xpcall(chunk, debug.traceback)}
+        local data
 
-		if data[1] then
-			return 1, Table.unpack(data, 2, data.n)
-		else
-			return False, data[2]
-		end
+        if traceback then
+            data = tablePack(xpcall(chunk, debug.traceback))
+        else
+            data = tablePack(pcall(chunk))
+        end
+
+        if data[1] then
+            Table.remove(data, 1)
+            data.n = data.n - 1
+            return 1, data
+        else
+            return False, data[2]
+        end
 	end
 end,
 
@@ -83,10 +95,10 @@ end
 
 local set, fill, getCenterX =
 
-function(x, y, str, background, foreground)
+function(x, y, text, background, foreground)
     gpuSetBackground(background or Background)
     gpuSetForeground(foreground or Foreground)
-    gpu.set(x, y, str)
+    gpu.set(x, y, text)
 end,
 
 function(x, y, width, height, symbol, background, foreground)
@@ -99,14 +111,14 @@ function(len)
     return mathCeil(width / 2 - len / 2)
 end
 
-local clear, center, sleep, bootFrom, elementsLen, checkAction =
+local clear, center, sleep, bootFrom, elementsLen, checkAction, cutLabel =
 
 function()
     fill(1, 1, width, height, " ", Background)
 end,
 
-function(y, str, background, foreground)
-    set(getCenterX(unicodeLen(str)), y, str, background, foreground)
+function(y, text, background, foreground)
+    set(getCenterX(unicodeLen(text)), y, text, background, foreground)
 end,
 
 function(timeout, breakCode, onBreak)
@@ -147,27 +159,31 @@ function(action, Self)
     if action and type(action) == "function" then
         action(Self)
     end
+end,
+
+function(label)
+    return not label and label or unicodeLen(label) > 8 and unicodeSub(label, 1, 6) .. "…" or label
 end
 
-local status, input = 
+local status, input, PRINT =
 
-function(str, title, wait, breakCode, onBreak)
+function(text, title, wait, breakCode, onBreak)
     if gpuAndScreen then
         local lines = {}
 
-        for line in str:gmatch"[^\r\n]+" do
+        for line in text:gmatch"[^\r\n]+" do
             lines[#lines + 1] = line:gsub("\t", "")
         end
 
         local y = mathCeil(centerY - #lines / 2) + 1
         clear()
         if title then
-            center(y - 1, title, Background, white)
+            center(y - 1, title)
             y = y + 1
         end
 
         for i = 1, #lines do
-            center(y, lines[i], Background, Foreground)
+            center(y, lines[i])
             y = y + 1
         end
 
@@ -175,61 +191,63 @@ function(str, title, wait, breakCode, onBreak)
     end
 end,
 
-function()
-    function(y, center, prefix)
-        local input, keys = "", {}
-        local prefixLen, draw = unicodeLen(prefix or ""),
-    
-        function()
-            fill(1, y, width, 1, " ", Background)
-            if center then
-                center(y, prefix .. input)
-            else
-                set(1, y, input)
-            end
-        end
-    
-        while 1 do
-            local signal = {computerPullSignal()}
-    
-            if signal[1] == keyDown then
-                keys[signal[4]] = 1
-                if keys[29] and keys[46] then
-                    return False
-                elseif signal[3] >= 32 and unicodeLen(input) < width - 1 - prefix then
-                    input = input .. unicode.char(signal[3])
-                    draw()
-                elseif signal[4] == 14 then
-                    input = unicode.sub(input, 1, unicodeLen(input))
-                    draw()
-                elseif signal[4] == 28 then
-                    return input
-                end 
-            elseif signal[1] == "key_up" then
-                keys[signal[4]] = False
-            end
+function(y, centrize, prefix)
+    local input, keys, cursorState = "", {}, 1
+    local prefixLen, draw = unicodeLen(prefix or ""),
+
+    function()
+        local text = prefix .. input .. (cursorState and "█" or " ")
+        fill(1, y, width, 1, " ")
+        if centrize then
+            center(y, text, Background, white)
+        else
+            set(1, y, text, Background, white)
         end
     end
-end
 
-local Error, candidateSelected, input =
+    draw()
+    while 1 do
+        local signal = {computerPullSignal(.8)}
 
-function(err)
-    if gpuAndScreen then
-        status(err, "¯\\_(ツ)_/¯", mathHuge, False, computerShutdown)
-    else
-        error(err)
+        if signal[1] == keyDown then
+            keys[signal[4]] = 1
+            if signal[3] >= 32 and unicodeLen(input) < width - 2 - prefixLen then
+                input, cursorState = input .. unicode.char(signal[3]), 1
+                draw()
+            elseif signal[4] == 14 then
+                input, cursorState = unicode.sub(input, 1, unicodeLen(input) - 1), 1
+                draw()
+            elseif signal[4] == 28 then
+                fill(1, y, width, 1, " ")
+                return input
+            elseif keys[29] and keys[46] then
+                fill(1, y, width, 1, " ")
+                return False
+            end
+        elseif signal[1] == "key_up" then
+            keys[signal[4]] = False
+        elseif signal[1] == "clipboard" then
+            input = input .. signal[3]
+            draw()
+        else
+            cursorState = not cursorState
+            draw()
+        end
     end
 end,
 
-function(options, selected, bootables)
-    local proxy = bootCandidates[selected][1]
-    local readOnly = proxy.isReadOnly()
-    options.e[4], options.e[5] = {t = "Rename", a = function()  end}, not readOnly and {t = "Format", a = function() proxy.remove("/") bootables:d() end} or False
-    fill(1, centerY + 5, width, 3, " ", Background)
-    center(centerY + 5, bootFrom(bootCandidates[selected]), False, white)
-    center(centerY + 7, ("Disk usage %s%% %s"):format(math.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "R/O" or "R/W"))
-    options:d()
+function(...)
+    gpu.copy(1, 1, width, height - 1, 0, -1)
+    fill(1, height - 1, width, 1, " ")
+    set(1, height - 1, tableConcat({...}, "    "))
+end
+
+local function Error(err, func)
+    if gpuAndScreen then
+        status(err, "¯\\_(ツ)_/¯", mathHuge, False, func or computerShutdown)
+    else
+        error(err)
+    end
 end
 
 local boot, addBootCandidate, createElements =
@@ -242,7 +260,7 @@ function(bootImage)
             eepromSetData(bootImage[3])
         end
 
-        local success, err = execute(read(bootImage[1], bootImage[4]), "=" .. bootImage[4])
+        local success, err = execute(1, read(bootImage[1], bootImage[4]), "=" .. bootImage[4])
 
         if success then
             return 1
@@ -253,10 +271,10 @@ function(bootImage)
 end,
 
 function(address)
-    local proxy = select(2, pcall(componentProxy, address))
+    local proxy = select(2, Pcall(componentProxy, address))
 
     if proxy then
-        tableInsert(bootCandidates, {proxy, proxy.getLabel() or "undefined", address})
+        tableInsert(bootCandidates, {proxy, proxy.getLabel() or undefined, address})
 
         for i = 1, #bootFiles do
             if proxy.exists(bootFiles[i]) then
@@ -275,7 +293,7 @@ function(elements, y, drawSelectedItem, border, onArrowKeyUpOrDown)
         e = elements,
         s = 1,
         d = function(Self)
-            fill(1, y - 1, width, 3, " ", Background)
+            fill(1, y - 1, width, 3, " ")
             Self.s = Self.s > #Self.e and #Self.e or Self.s
             checkAction(Self.e[Self.s].d, Self)
             local x, bigBorder = getCenterX(elementsLen(Self.e, border)), border == 1 and 1
@@ -287,7 +305,7 @@ function(elements, y, drawSelectedItem, border, onArrowKeyUpOrDown)
                     fill(x - 3, y - (bigBorder and 1 or 0), Self.e[i].l + 6, (bigBorder and 3 or 1), " ", selectedItem)
                 end
 
-                set(x, y, Self.e[i].t, selectedItem, Foreground)
+                set(x, y, Self.e[i].t, selectedItem)
                 x = x + Self.e[i].l + (bigBorder and 6 or 8)
             end
         end
@@ -305,24 +323,105 @@ local function updateCandidates()
 end
 
 local function main()
-    local bootables, options
-    bootables, options = createElements({}, centerY - 2, 1, 1, function() options.o, options.s, bootables.o, selectedElement = 1, options.s or mathCeil(#options.e / 2), False, options bootables:d() options:d() end)
-    for i = 1, #bootCandidates do
-        local label = bootCandidates[i][2]
-        if unicodeLen(label) > 8 then
-            label = unicodeSub(label, 1, 6) .. "…"
+    local bootables, options, draw
+
+    bootables, draw = createElements({}, centerY - 2, 1, 1,
+        function()
+            options.o, options.s, bootables.o, selectedElement = 1, options.s or mathCeil(#options.e / 2), False, options
+            bootables:d()
+            options:d()
         end
-        tableInsert(bootables.e, {t = label, a = function(Self) boot(bootCandidates[Self.s]) end, d = function(Self) print(Self.s, Self.e[1].t) candidateSelected(options, Self.s, bootables) end})
+    ), function()
+        clear()
+        center(height, "Use ← ↑ → keys to move cursor; Enter to do something; F5 to refresh")
+        bootables:d()
+        options:d()
     end
-    options, selectedElement = createElements({
+
+    for i = 1, #bootCandidates do
+        local label = cutLabel(bootCandidates[i][2])
+        tableInsert(bootables.e, {t = label, a = function(Self) boot(bootCandidates[Self.s]) end, d = function(Self)
+            local proxy = bootCandidates[Self.s][1]
+            local readOnly = proxy.isReadOnly()
+            fill(1, centerY + 5, width, 3, " ")
+            center(centerY + 5, bootFrom(bootCandidates[Self.s]), False, white)
+            center(centerY + 7, ("Disk usage %s%% %s"):format(math.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "R/O" or "R/W"))
+
+            options.e[4], options.e[5] = {t = "Rename", a =
+            function()
+                local label = input(centerY + 9, 1, "New label: ") or undefined
+                if Pcall(proxy.setLabel, label) then
+                    label = cutLabel(label)
+                    bootCandidates[bootables.s][2], bootables.e[bootables.s].t = label, label
+                    bootables:d()
+                end
+            end}, not readOnly and {t = "Format", a =
+
+            function()
+                proxy.remove("/")
+                bootables:d()
+            end} or False
+
+            options:d()
+        end})
+    end
+
+    options = createElements({
         {t = "Power Off", a = computerShutdown},
-        {t = "Shell"},
-        {t = "Recovery"},
-    }, centerY + (#bootCandidates >= 1 and 2 or 0), False, 0, function() options.o, bootables.o, selectedElement = False, 1 ,bootables bootables:d() options:d() end), bootables
-    clear()
-    center(height, "Use ← ↑ → keys to move cursor; Enter to do something; F5 to refresh")
-    bootables:d()
-    options:d()
+        {t = "Shell", a =
+            function()
+
+                clear()
+                ::loop::
+                    local code = input(height, False, "> ")
+
+                    if code then
+                        local success, data = execute(False, code, "=stdin", setmetatable({
+                            PRINT = PRINT,
+                            proxy = proxy
+                        }, {__index = _G}))
+
+                        if success then
+                            if data.n > 0 then
+                                for i = 1, data.n do
+                                    data[i] = tostring(data[i])
+                                end
+
+                                PRINT(tableConcat(data, "    "))
+                            end
+                        else
+                            PRINT(data)
+                        end
+                    goto loop
+                end
+                draw()
+            end
+        }, 
+        {t = "Recovery", a =
+            function()
+                local url = input(centerY + 9, 1, "Script URL: ")
+                center(centerY + 9, "Downloading...", Background, white)
+
+                if url then
+                    local success, err = execute(1, request(url), "=recovery.lua")
+
+                    if success then
+                        draw()
+                    else
+                        Error(err, main)
+                    end
+                end
+            end
+        }
+    }, centerY + (#bootCandidates >= 1 and 2 or 0), False, 0,
+        function()
+            options.o, bootables.o, selectedElement = False, 1, bootables
+            bootables:d()
+            options:d()
+        end
+    )
+    selectedElement = bootables
+    draw()
 end
 
 updateCandidates()
@@ -352,8 +451,6 @@ if status("Press S to stay in bootloader", False, 1, 31) then
     end
 end
 
-if #bootCandidates >= 1 then
-    boot(bootCandidates[1])
-else
+if not boot(bootCandidates[1]) then
     Error("No bootable medium found")
 end
