@@ -1,8 +1,9 @@
-local bootFiles, Component, Computer, Table, Math, Background, Foreground, white, keyDown, bootCandidates, False, gpuAndScreen, width, height, centerY = {
-    "/init.lua"
-}, component, computer, table, math, 0x002b36, 0x8cb9c5, 0xffffff, "key_down"
+local bootFiles, Component, Computer, Table, Math, Unicode, Background, Foreground, white, gray, keyDown, bootCandidates, False, gpuAndScreen, width, height, centerY, computerShutdown, selectedElement = {
+    "/init.lua",
+    "/OS.lua"
+}, component, computer, table, math, unicode, 0x002b36, 0x8cb9c5, 0xffffff, 0x292929, "key_down"
 
-local componentProxy, componentList, computerPullSignal, computerUptime, mathHuge, mathCeil, tableInsert = Component.proxy, Component.list, Computer.pullSignal, computer.uptime, Math.huge, Math.ceil, Table.insert
+local componentProxy, componentList, computerPullSignal, computerUptime, mathHuge, mathCeil, tableInsert, unicodeLen, unicodeSub = Component.proxy, Component.list, Computer.pullSignal, computer.uptime, Math.huge, Math.ceil, Table.insert, Unicode.len, Unicode.sub
 
 local function proxy(componentType)
     local address = componentList(componentType)()
@@ -10,15 +11,18 @@ local function proxy(componentType)
 end
 
 local gpu, eeprom, internet, screen, tmpfs = proxy"gp" or {}, proxy"pr", proxy"in", proxy"sc", componentProxy(Computer.tmpAddress())
-local gpuSetBackground, gpuSetForeground, eepromGetData, eepromSetData, computerShutdown = gpu.setBackground, gpu.setForeground, eeprom.getData, eeprom.setData, computer.shutdown
+local gpuSetBackground, gpuSetForeground, gpuSetPaletteColor, eepromGetData, eepromSetData = gpu.setBackground, gpu.setForeground, gpu.setPaletteColor, eeprom.getData, eeprom.setData
 computer.getBootAddress = eepromGetData
 computer.setBootAddress = eepromSetData
+computerShutdown = function()
+    computer.shutdown()
+end
 
 if gpuSetBackground and screen then
     gpu.bind((componentList"sc"()))
-    gpuAndScreen, width, height = 1, gpu.maxResolution()
+    gpuAndScreen, oldPalette, width, height = 1, gpu.getPaletteColor(9), gpu.maxResolution()
     centerY = height / 2
-    gpu.setPaletteColor(9, 0x002b36)
+    gpuSetPaletteColor(9, Background)
     gpu.setResolution(width, height)
 end
 
@@ -95,14 +99,14 @@ function(len)
     return mathCeil(width / 2 - len / 2)
 end
 
-local clear, center, sleep, bootFrom, elementsLen = 
+local clear, center, sleep, bootFrom, elementsLen, checkAction = 
 
 function()
-    fill(1, 1, width, height, " ", 0x002b36)
+    fill(1, 1, width, height, " ", Background)
 end,
 
 function(y, str, background, foreground)
-    set(getCenterX(unicode.len(str)), y, str, background, foreground)
+    set(getCenterX(unicodeLen(str)), y, str, background, foreground)
 end,
 
 function(timeout, breakCode, onBreak)
@@ -119,19 +123,25 @@ function(timeout, breakCode, onBreak)
     until computerUptime() >= deadline
 end,
 
-function(proxy, file, alreadyBooting)
-    return("Boot%s %s from %s (%s)"):format(alreadyBooting and "ing" or "", file, proxy.getLabel() or "undefined", proxy.address)
+function(bootImage, alreadyBooting)
+    return("Boot%s %s from %s (%s)"):format(alreadyBooting and "ing" or "", bootImage[4], bootImage[2], alreadyBooting and bootImage[5] or unicodeSub(bootImage[5], 1, 3) .. "…")
 end,
 
-function(elements)
+function(elements, border)
     local allLen = 0
 
     for i = 1, #elements do
-        local len = unicode.len(elements[i].t)
-        allLen, elements[i].l = allLen + len + (i == #elements and 0 or 8), len
+        local len = unicodeLen(elements[i].t)
+        allLen, elements[i].l = allLen + len + (i == #elements and 0 or (border == 1 and 8 or 10)), len
     end
 
     return allLen
+end,
+
+function(action, Self)
+    if action and type(action) == "function" then
+        action(Self)
+    end
 end
 
 local function status(str, title, wait, breakCode, onBreak)
@@ -142,15 +152,15 @@ local function status(str, title, wait, breakCode, onBreak)
             lines[#lines + 1] = line:gsub("\t", "")
         end
 
-        local y = mathCeil(centerY - #lines / 2)
+        local y = mathCeil(centerY - #lines / 2) + 1
         clear()
         if title then
-            center(y - 1, title, False, white)
+            center(y - 1, title, Background, white)
             y = y + 1
         end
 
         for i = 1, #lines do
-            center(y, lines[i])
+            center(y, lines[i], Background, Foreground)
             y = y + 1
         end
 
@@ -158,24 +168,34 @@ local function status(str, title, wait, breakCode, onBreak)
     end
 end
 
-local function Error(err)
+local Error, candidateSelected = 
+
+function(err)
     if gpuAndScreen then
         status(err, "¯\\_(ツ)_/¯", mathHuge, False, computerShutdown)
     else
         error(err)
     end
+end,
+
+function(options, selected)
+    options.e[4], options.e[5] = {t = "Rename"}, {t = "Format"}
+    fill(1, centerY + 6, width, 3, " ", Background)
+    center(centerY + 6, bootFrom(bootCandidates[selected]), False, white)
+    center(centerY + 8, "Disk usage ")
+    options:d()
 end
 
-local boot, addBootCandidate, menu =
+local boot, addBootCandidate, createElements =
 
-function(proxy, file, prettyViewFile)
-    status(bootFrom(proxy, prettyViewFile, 1), False, .5)
+function(bootImage)
+    status(bootFrom(bootImage, 1), False, .5)
 
-    if eepromGetData() ~= proxy.address then
-        eepromSetData(proxy.address)
+    if eepromGetData() ~= bootImage[5] then
+        eepromSetData(bootImage[5])
     end
 
-    local success, err = execute(read(proxy, file), "=" .. prettyViewFile)
+    local success, err = execute(read(bootImage[1], bootImage[3]), "=" .. bootImage[4])
 
     if success then
         return 1
@@ -188,94 +208,107 @@ function(address)
     local proxy = select(2, pcall(componentProxy, address))
 
     if proxy then
-        tableInsert(filesystems, proxy)
+        tableInsert(bootCandidates, {proxy, proxy.getLabel() or "undefined", address, bootFiles[i], bootFiles[i]:gsub("/", "", 1)})
 
         for i = 1, #bootFiles do
             if proxy.exists(bootFiles[i]) then
-                tableInsert(bootCandidates, {proxy, bootFiles[i], bootFiles[i]:gsub("/", "", 1)})
+                tableInsert(bootCandidates, {proxy, proxy.getLabel() or "undefined", bootFiles[i], bootFiles[i]:gsub("/", "", 1), address})
+                break
             end
         end
     end
 end,
 
-function(elements, y, actionOnDraw, actionOnArrowKeyUp, actionOnArrowKeyDown, actionOnF5)
-    local globalX, selected, action = getCenterX(elementsLen(elements)), 1,
-
-    function(checkAction, Self)
-        if checkAction and type(checkAction) == "function" then
-            checkAction(Self)
-        end
-    end
-
+function(elements, y, selected, border, onArrowKeyUpOrDown)
     return {
-        d = function()
-            local x = globalX
-            clear()
+        a = onArrowKeyUpOrDown, 
+        w = 1,
+        e = elements,
+        s = selected or 0,
+        d = function(Self)
+            local x, bigBorder = getCenterX(elementsLen(Self.e, border)), border == 1 and 1
+            x = bigBorder and x or x - 1
+            fill(1, y - (bigBorder and 1 or 0), width, (bigBorder and 3 or 1), " ")
 
-            for i = 1, #elements do
-                local selectedItem = i == selected and 0x292929
+            for i = 1, #Self.e do
+                local selectedItem = i == Self.s and gray
 
                 if selectedItem then
-                    fill(x - 3, y, elements[i].l + 6, 1, " ", selectedItem)
+                    fill(x - 3, y - (bigBorder and 1 or 0), Self.e[i].l + 6, (bigBorder and 3 or 1), " ", selectedItem)
                 end
 
-                set(x, y, elements[i].t, selectedItem)
-                x = x + elements[i].l + 8
-            end
-
-            action(actionOnDraw)
-        end,
-        l = function(Self)
-            while 1 do
-                local signal = {computerPullSignal()}
-
-                if signal[1] == keyDown then
-                    if signal[4] == 203 and selected > 1 then
-                        selected = selected - 1
-                        Self:d()
-                    elseif signal[4] == 205 and selected < #elements then
-                        selected = selected + 1
-                        Self:d()
-                    elseif signal[4] == 200 then
-                        action(actionOnArrowKeyUp, Self)
-                    elseif signal[4] == 208 then
-                        action(actionOnArrowKeyDown, Self)
-                    elseif signal[4] == 63 then
-                        action(actionOnF5, Self)
-                    elseif signal[4] == 28 then
-                        action(elements[selected].a, Self)
-                    end
-                end
+                set(x, y, Self.e[i].t, selectedItem, Foreground)
+                x = x + Self.e[i].l + (bigBorder and 8 or 10)
             end
         end
     }
 end
 
 local function updateCandidates()
-    bootCandidates, filesystems = {}, {}
+    bootCandidates = {}
     addBootCandidate(eepromGetData())
     for filesystem in pairs(componentList"fi") do
-
         if eepromGetData() ~= filesystem then
             addBootCandidate(filesystem)
         end
     end
 end
 
-updateCandidates()
-if status("Press F9 to stay in bootloader", False, .8, 67) then
-    local main = menu({
+local function main()
+    local bootables, options
+    bootables, options = createElements({}, centerY - 2, 1, 1, function() options.s, selectedElement = mathCeil(#options.e / 2) , options options:d() end)
+    for i = 1, #bootCandidates do
+        local label = bootCandidates[i][2]
+        if unicodeLen(label) > 8 then
+            label = unicodeSub(label, 1, 6) .. "…"
+        end
+        tableInsert(bootables.e, {t = label, a = function(Self) boot(bootCandidates[Self.s]) end, o = function(Self) candidateSelected(options, Self.s) end})
+    end
+    options, selectedElement = createElements({
         {t = "Power Off", a = computerShutdown},
-        {t = "Settings"},
         {t = "Shell"},
-        {t = "Recovery"}
-    }, centerY + 5, function() center(height, "Use ← ↑ → keys to move cursor; Enter to do something; F5 to refresh") end, False, False, function(Self) updateCandidates() Self:d() end)
-    main:d()
-    main:l()
+        {t = "Recovery"},
+    }, centerY + (#bootCandidates >= 1 and 2 or 0), 0, 0, function() selectedElement = bootables options:d() bootables:d() end), bootables
+    clear()
+    if #bootCandidates >= 1 then
+        candidateSelected(options, 1)
+    end
+    center(height, "Use ← ↑ → keys to move cursor; Enter to do something; F5 to refresh")
+    bootables:d()
+    options:d()
+end
+
+updateCandidates()
+if status("Press S to stay in bootloader", False, 1, 31) then
+    main()
+    while 1 do
+        local signal = {computerPullSignal()}
+
+        if signal[1] == keyDown then
+            if signal[4] == 203 and selectedElement.s > 1 then
+                selectedElement.s = selectedElement.s - 1
+                selectedElement:d()
+                checkAction(selectedElement.e[selectedElement.s].o, selectedElement)
+            elseif signal[4] == 205 and selectedElement.s < #selectedElement.e then
+                selectedElement.s = selectedElement.s + 1
+                selectedElement:d()
+                checkAction(selectedElement.e[selectedElement.s].o, selectedElement)
+            elseif signal[4] == 200 then
+                checkAction(selectedElement.a, selectedElement, 1)
+            elseif signal[4] == 208 then
+                checkAction(selectedElement.a, selectedElement, False)
+            elseif signal[4] == 63 then
+                updateCandidates()
+                main()
+            elseif signal[4] == 28 then
+                checkAction(selectedElement.e[selectedElement.s].a, selectedElement)
+            end
+        end
+    end
 end
 
 if #bootCandidates >= 1 then
-    boot(bootCandidates[1][1], bootCandidates[1][2], bootCandidates[1][3])
+    boot(bootCandidates[1])
 else
     Error("No bootable medium found")
 end
