@@ -183,12 +183,14 @@ function(err)
     end
 end,
 
-function(options, selected)
+function(options, selected, bootables)
     local proxy = bootCandidates[selected][1]
     local readOnly = proxy.isReadOnly()
-    options.e[4], options.e[5], options.s = {t = "Rename"}, not readOnly and {t = "Format", a = function() proxy.remove("/") options:d() end} or False, options.s == 5 and 4 or options.s
+    options.e[4], options.e[5] = {t = "Rename"}, not readOnly and {t = "Format", a = function() proxy.remove("/") bootables:d() end} or False
+    fill(1, centerY + 5, width, 3, " ", Background)
     center(centerY + 5, bootFrom(bootCandidates[selected]), False, white)
     center(centerY + 7, ("Disk usage %s%% %s"):format(math.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "R/O" or "R/W"))
+    options:d()
 end
 
 local boot, addBootCandidate, createElements =
@@ -234,10 +236,10 @@ function(elements, y, drawSelectedItem, border, onArrowKeyUpOrDown)
         e = elements,
         s = 1,
         d = function(Self)
-            fill(1, 1, width, height - 1, " ", Background)
+            fill(1, y - 1, width, 3, " ", Background)
+            Self.s = Self.s > #Self.e and #Self.e or Self.s
             checkAction(Self.e[Self.s].d, Self)
             local x, bigBorder = getCenterX(elementsLen(Self.e, border)), border == 1 and 1
-            print(#Self.e)
 
             for i = 1, #Self.e do
                 local selectedItem = Self.o and (i == Self.s and gray)
@@ -265,19 +267,19 @@ end
 
 local function main()
     local bootables, options
-    bootables, options = createElements({}, centerY - 2, 1, 1, function() options.o, options.s, bootables.o = 1, options.s or mathCeil(#options.e / 2), False selectedElement = options bootables:d() options:d() end)
+    bootables, options = createElements({}, centerY - 2, 1, 1, function() options.o, options.s, bootables.o, selectedElement = 1, options.s or mathCeil(#options.e / 2), False, options bootables:d() options:d() end)
     for i = 1, #bootCandidates do
         local label = bootCandidates[i][2]
         if unicodeLen(label) > 8 then
             label = unicodeSub(label, 1, 6) .. "…"
         end
-        tableInsert(bootables.e, {t = label, a = function(Self) boot(bootCandidates[Self.s]) end, d = function(Self) print(Self.s, Self.e[1].t) candidateSelected(options, Self.s) end})
+        tableInsert(bootables.e, {t = label, a = function(Self) boot(bootCandidates[Self.s]) end, d = function(Self) print(Self.s, Self.e[1].t) candidateSelected(options, Self.s, bootables) end})
     end
     options, selectedElement = createElements({
         {t = "Power Off", a = computerShutdown},
         {t = "Shell"},
         {t = "Recovery"},
-    }, centerY + (#bootCandidates >= 1 and 2 or 0), False, 0, function() options.o, bootables.o = False, 1 selectedElement = bootables bootables:d() options:d() end), bootables
+    }, centerY + (#bootCandidates >= 1 and 2 or 0), False, 0, function() options.o, bootables.o, selectedElement = False, 1 ,bootables bootables:d() options:d() end), bootables
     clear()
     center(height, "Use ← ↑ → keys to move cursor; Enter to do something; F5 to refresh")
     bootables:d()
