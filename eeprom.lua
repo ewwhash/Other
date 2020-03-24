@@ -1,7 +1,7 @@
-local bootFiles, Component, Computer, Table, Math, Unicode, Pcall, Load, Background, Foreground, white, cyan, keyDown, undefined, bootCandidates, False, gpuAndScreen, width, height, centerY, computerShutdown, selectedElement = {
+local bootFiles, Component, Computer, Table, Math, Unicode, Pcall, Load, Background, Foreground, white, spaces, keyDown, undefined, bootCandidates, False, gpuAndScreen, width, height, centerY, computerShutdown, selectedElement = {
     "/init.lua",
     "/OS.lua"
-}, component, computer, table, math, unicode, pcall, load, 0x002b36, 0x8cb9c5, 0xffffff, 0x8db9c6, "key_down", "undefined"
+}, component, computer, table, math, unicode, pcall, load, 0x002b36, 0x8cb9c5, 0xffffff, "    ", "key_down", "undefined"
 
 local componentProxy, componentList, computerPullSignal, computerUptime, mathHuge, mathCeil, tableInsert, tablePack, tableConcat, unicodeLen, unicodeSub = Component.proxy, Component.list, Computer.pullSignal, computer.uptime, Math.huge, Math.ceil, Table.insert, Table.pack, Table.concat, Unicode.len, Unicode.sub
 
@@ -11,7 +11,7 @@ local function proxy(componentType)
 end
 
 local gpu, eeprom, internet, screen = proxy"gp" or {}, proxy"pr", proxy"in", proxy"sc"
-local gpuSetBackground, gpuSetForeground, gpuSetPaletteColor, eepromGetData, eepromSetData = gpu.setBackground, gpu.setForeground, gpu.setPaletteColor, eeprom.getData, eeprom.setData
+local gpuSetBackground, gpuSetForeground, eepromGetData, eepromSetData = gpu.setBackground, gpu.setForeground, eeprom.getData, eeprom.setData
 Computer.getBootAddress = eepromGetData
 Computer.setBootAddress = eepromSetData
 computerShutdown = function()
@@ -20,9 +20,9 @@ end
 
 if gpuSetBackground and screen then
     gpu.bind((componentList"sc"()))
-    gpuAndScreen, oldPalette, width, height = 1, gpu.getPaletteColor(9), gpu.maxResolution()
+    gpuAndScreen, width, height = 1, gpu.maxResolution()
     centerY = height / 2
-    gpuSetPaletteColor(9, Background)
+    gpu.setPaletteColor(9, Background)
     gpu.setResolution(width, height)
 end
 
@@ -49,9 +49,9 @@ function(...)
     end
 end,
 
-function(traceback, code, stdin, env)
+function(code, stdin, env)
     local chunk, err = Load("return " .. code, stdin, False, env)
-    
+
     if not chunk then
         chunk, err = Load(code, stdin, False, env)
     end
@@ -59,13 +59,8 @@ function(traceback, code, stdin, env)
 	if not chunk and err then
 		return False, err
 	else
-        local data
+        local data = tablePack(xpcall(chunk, debug.traceback))
 
-        if traceback then
-            data = tablePack(xpcall(chunk, debug.traceback))
-        else
-            data = tablePack(Pcall(chunk))
-        end
 
         if data[1] then
             Table.remove(data, 1)
@@ -97,7 +92,7 @@ function(condition, first, second)
     return condition and first or second
 end
 
-local set, fill, getCenterX =
+local set, fill, getCenterX, split =
 
 function(x, y, text, background, foreground)
     gpuSetBackground(background or Background)
@@ -113,6 +108,16 @@ end,
 
 function(len)
     return mathCeil(width / 2 - len / 2)
+end,
+
+function(text, tabulate)
+    local lines = {}
+
+    for line in text:gmatch"[^\r\n]+" do
+        lines[#lines + 1] = line:gsub("\t", ternary(tabulate, spaces, ""))
+    end
+
+    return lines
 end
 
 local clear, center, sleep, bootFrom, elementsLen, checkAction, cutLabel =
@@ -142,9 +147,9 @@ end,
 function(bootImage, alreadyBooting)
     local address = ternary(alreadyBooting, bootImage[3], unicodeSub(bootImage[3], 1, 3) .. "…")
     if bootImage[4] then
-        return("Boot%s %s from %s (%s)"):format(ternary(alreadyBooting, "ing", ""), bootImage[5], bootImage[2], address)
+        return ("Boot%s %s from %s (%s)"):format(ternary(alreadyBooting, "ing", ""), bootImage[5], bootImage[2], address)
     else
-        return("Boot from %s (%s) is not available"):format(bootImage[2], address)
+        return ("Boot from %s (%s) is not available"):format(bootImage[2], address)
     end
 end,
 
@@ -173,12 +178,7 @@ local status, input, print =
 
 function(text, title, wait, breakCode, onBreak)
     if gpuAndScreen then
-        local lines = {}
-
-        for line in text:gmatch"[^\r\n]+" do
-            lines[#lines + 1] = line:gsub("\t", "")
-        end
-
+        local lines = split(text)
         local y = mathCeil(centerY - #lines / 2) + 1
         clear()
         if title then
@@ -201,7 +201,7 @@ function(y, centrize, prefix)
     local function cursorBlink(force)
         if allLen < width then
             cursorState, cursorX = force or not cursorState, x + prefixLen + cursorPos - 1
-            set(cursorX, y, gpu.get(cursorX, y), ternary(cursorState, white, Background), ternary(cursorState, cyan, white))
+            set(cursorX, y, gpu.get(cursorX, y), ternary(cursorState, white, Background), ternary(cursorState, Background, white))
         end
     end
 
@@ -233,8 +233,7 @@ function(y, centrize, prefix)
                 input, cursorState, cursorPos = unicodeSub(unicodeSub(input, 1, cursorPos - 1), 1, -2) .. unicodeSub(input, cursorPos, -1), 1, cursorPos - 1
                 draw()
             elseif signal[4] == 28 then
-                fill(1, y, width, 1, " ")
-                return input
+                break
             elseif signal[4] == 203 and cursorPos > 1 then
                 cursorPos, cursorState = cursorPos - 1, 1
                 draw()
@@ -242,8 +241,8 @@ function(y, centrize, prefix)
                 cursorPos, cursorState = cursorPos + 1, 1
                 draw()
             elseif keys[29] and keys[46] then
-                fill(1, y, width, 1, " ")
-                return False
+                error()
+                break
             else
                 cursorBlink(1)
             end
@@ -256,17 +255,20 @@ function(y, centrize, prefix)
             cursorBlink()
         end
     end
+
+    fill(1, y, width, 1, " ")
+    return input
 end,
 
 function(...)
     gpu.copy(1, 1, width, height - 1, 0, -1)
     fill(1, height - 1, width, 1, " ")
-    set(1, height - 1, tableConcat({...}, "    "))
+    set(1, height - 1, tableConcat({...}, spaces))
 end
 
 local function Error(err, func)
     if gpuAndScreen then
-        status(err, "¯\\_(ツ)_/¯", mathHuge, False, func or computerShutdown)
+        status(err, "¯\\_(ツ)_/¯", mathHuge, 0, func or computerShutdown)
     else
         error(err)
     end
@@ -282,7 +284,7 @@ function(bootImage)
             eepromSetData(bootImage[3])
         end
 
-        local success, err = execute(1, read(bootImage[1], bootImage[4]), "=" .. bootImage[4])
+        local success, err = execute(read(bootImage[1], bootImage[4]), "=" .. bootImage[4])
 
         if success then
             return 1
@@ -393,18 +395,19 @@ local function main()
         {t = "Shell", a =
             function()
 
-                clear()
                 local env = setmetatable({
                     print = print,
                     proxy = proxy,
-                    sleep = sleep,
+                    sleep = function(timeout) sleep(timeout, 56) end
                 }, {__index = _G})
 
+                clear()
                 ::loop::
                     local code = input(height, False, "> ")
 
                     if code then
-                        local success, data = execute(False, code, "=stdin", env)
+                        set(1, height, ">")
+                        local success, data = execute(code, "=stdin", env)
 
                         if success then
                             if data.n > 0 then
@@ -412,10 +415,14 @@ local function main()
                                     data[i] = tostring(data[i])
                                 end
 
-                                print(tableConcat(data, "    "))
+                                print(tableConcat(data, spaces))
                             end
                         else
-                            print(data)
+                            local lines = split(data, 1)
+
+                            for i = 1, #lines do
+                                print(lines[i])
+                            end
                         end
                     goto loop
                 end
@@ -425,15 +432,15 @@ local function main()
         {t = "Recovery", a =
             function()
                 local url = input(centerY + 9, 1, "Script URL: ")
-                center(centerY + 9, "Downloading...", Background, white)
 
-                if url then
-                    local success, err = execute(1, request(url), "=recovery.lua")
+                if url and url ~= "" then
+                    center(centerY + 9, "Downloading...", Background, white)
+                    local success, err = execute(request(url) or "", "=recovery.lua")
 
                     if success then
                         draw()
                     else
-                        Error(err, main)
+                        Error(err, draw)
                     end
                 end
             end
