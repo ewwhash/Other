@@ -1,7 +1,7 @@
-local bootFiles, Component, Computer, Table, Math, Unicode, Pcall, Load, Background, Foreground, white, gray, keyDown, undefined, bootCandidates, False, gpuAndScreen, width, height, centerY, computerShutdown, selectedElement = {
+local bootFiles, Component, Computer, Table, Math, Unicode, Pcall, Load, Background, Foreground, white, cyan, keyDown, undefined, bootCandidates, False, gpuAndScreen, width, height, centerY, computerShutdown, selectedElement = {
     "/init.lua",
     "/OS.lua"
-}, component, computer, table, math, unicode, pcall, load, 0x002b36, 0x8cb9c5, 0xffffff, 0x292929, "key_down", "undefined"
+}, component, computer, table, math, unicode, pcall, load, 0x002b36, 0x8cb9c5, 0xffffff, 0x8db9c6, "key_down", "undefined"
 
 local componentProxy, componentList, computerPullSignal, computerUptime, mathHuge, mathCeil, tableInsert, tablePack, tableConcat, unicodeLen, unicodeSub = Component.proxy, Component.list, Computer.pullSignal, computer.uptime, Math.huge, Math.ceil, Table.insert, Table.pack, Table.concat, Unicode.len, Unicode.sub
 
@@ -10,7 +10,7 @@ local function proxy(componentType)
     return address and componentProxy(address)
 end
 
-local gpu, eeprom, internet, screen, tmpfs = proxy"gp" or {}, proxy"pr", proxy"in", proxy"sc", componentProxy(Computer.tmpAddress())
+local gpu, eeprom, internet, screen = proxy"gp" or {}, proxy"pr", proxy"in", proxy"sc"
 local gpuSetBackground, gpuSetForeground, gpuSetPaletteColor, eepromGetData, eepromSetData = gpu.setBackground, gpu.setForeground, gpu.setPaletteColor, eeprom.getData, eeprom.setData
 Computer.getBootAddress = eepromGetData
 Computer.setBootAddress = eepromSetData
@@ -26,7 +26,7 @@ if gpuSetBackground and screen then
     gpu.setResolution(width, height)
 end
 
-local request, execute, read =
+local request, execute, read, ternary =
 
 function(...)
     if internet then
@@ -91,6 +91,10 @@ function(proxy, file)
             end
         goto loop
     end
+end,
+
+function(condition, first, second)
+    return condition and first or second
 end
 
 local set, fill, getCenterX =
@@ -136,9 +140,9 @@ function(timeout, breakCode, onBreak)
 end,
 
 function(bootImage, alreadyBooting)
-    local address = alreadyBooting and bootImage[3] or unicodeSub(bootImage[3], 1, 3) .. "…"
+    local address = ternary(alreadyBooting, bootImage[3], unicodeSub(bootImage[3], 1, 3) .. "…")
     if bootImage[4] then
-        return("Boot%s %s from %s (%s)"):format(alreadyBooting and "ing" or "", bootImage[5], bootImage[2], address)
+        return("Boot%s %s from %s (%s)"):format(ternary(alreadyBooting, "ing", ""), bootImage[5], bootImage[2], address)
     else
         return("Boot from %s (%s) is not available"):format(bootImage[2], address)
     end
@@ -149,7 +153,7 @@ function(elements, border)
 
     for i = 1, #elements do
         local len = unicodeLen(elements[i].t)
-        allLen, elements[i].l = allLen + len + (i == #elements and 0 or (border == 1 and 6 or 8)), len
+        allLen, elements[i].l = allLen + len + ternary(i == #elements, 0, ternary(border == 1, 6, 8)), len
     end
 
     return allLen
@@ -162,7 +166,7 @@ function(action, Self)
 end,
 
 function(label)
-    return not label and label or unicodeLen(label) > 8 and unicodeSub(label, 1, 6) .. "…" or label
+    return ternary(not label, label, ternary(unicodeLen(label) > 8, unicodeSub(label, 1, 6) .. "…", label))
 end
 
 local status, input, print =
@@ -178,7 +182,7 @@ function(text, title, wait, breakCode, onBreak)
         local y = mathCeil(centerY - #lines / 2) + 1
         clear()
         if title then
-            center(y - 1, title)
+            center(y - 1, title, Background, white)
             y = y + 1
         end
 
@@ -197,7 +201,7 @@ function(y, centrize, prefix)
     local function cursorBlink(force)
         if allLen < width then
             cursorState, cursorX = force or not cursorState, x + prefixLen + cursorPos - 1
-            set(cursorX, y, gpu.get(cursorX, y), cursorState and white or Background, cursorState and gray or white)
+            set(cursorX, y, gpu.get(cursorX, y), ternary(cursorState, white, Background), ternary(cursorState, cyan, white))
         end
     end
 
@@ -312,19 +316,19 @@ function(elements, y, drawSelectedItem, border, onArrowKeyUpOrDown)
         s = 1,
         d = function(Self)
             fill(1, y - 1, width, 3, " ")
-            Self.s = Self.s > #Self.e and #Self.e or Self.s
+            Self.s = ternary(Self.s > #Self.e, #Self.e, Self.s)
             checkAction(Self.e[Self.s].d, Self)
             local x, bigBorder = getCenterX(elementsLen(Self.e, border)), border == 1 and 1
 
             for i = 1, #Self.e do
-                local selectedItem = Self.o and (i == Self.s and gray)
+                local selectedItem = Self.o and (i == Self.s and Foreground)
 
                 if selectedItem then
-                    fill(x - 3, y - (bigBorder and 1 or 0), Self.e[i].l + 6, (bigBorder and 3 or 1), " ", selectedItem)
+                    fill(x - 3, y - ternary(bigBorder, 1, 0), Self.e[i].l + 6, ternary(bigBorder, 3, 1), " ", selectedItem)
                 end
 
-                set(x, y, Self.e[i].t, selectedItem)
-                x = x + Self.e[i].l + (bigBorder and 6 or 8)
+                set(x, y, Self.e[i].t, selectedItem, selectedItem and Background)
+                x = x + Self.e[i].l + ternary(bigBorder, 6, 8)
             end
         end
     }
@@ -363,7 +367,7 @@ local function main()
             local readOnly = proxy.isReadOnly()
             fill(1, centerY + 5, width, 3, " ")
             center(centerY + 5, bootFrom(bootCandidates[Self.s]), False, white)
-            center(centerY + 7, ("Disk usage %s%% %s"):format(Math.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "R/O" or "R/W"))
+            center(centerY + 7, ("Disk usage %s%% %s"):format(Math.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), ternary(readOnly, "R/O", "R/W")))
 
             options.e[4], options.e[5] = {t = "Rename", a =
             function()
@@ -373,12 +377,12 @@ local function main()
                     bootCandidates[bootables.s][2], bootables.e[bootables.s].t = label, label
                     bootables:d()
                 end
-            end}, not readOnly and {t = "Format", a =
+            end}, ternary(not readOnly, {t = "Format", a =
 
             function()
                 proxy.remove("/")
                 bootables:d()
-            end} or False
+            end}, False)
 
             options:d()
         end})
@@ -392,7 +396,8 @@ local function main()
                 clear()
                 local env = setmetatable({
                     print = print,
-                    proxy = proxy
+                    proxy = proxy,
+                    sleep = sleep,
                 }, {__index = _G})
 
                 ::loop::
@@ -433,7 +438,7 @@ local function main()
                 end
             end
         }
-    }, centerY + (#bootCandidates >= 1 and 2 or 0), False, 0,
+    }, centerY + ternary(#bootCandidates >= 1, 2, 0), False, 0,
         function()
             options.o, bootables.o, selectedElement = False, 1, bootables
             bootables:d()
@@ -471,6 +476,7 @@ if status("Press S to stay in bootloader", False, 1, 31) then
     end
 end
 
-if not boot(bootCandidates[1]) then
-    Error("No bootable medium found")
+for i = 1, #bootCandidates do
+    boot(bootCandidates[i])
 end
+Error("No bootable medium found")
