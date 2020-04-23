@@ -1,7 +1,7 @@
-local bootFiles, Component, Computer, Table, Math, Unicode, Pcall, Load, Background, Foreground, white, spaces, keyDown, undefined, bootCandidates, False, gpuAndScreen, width, height, centerY, computerShutdown, selectedElement = {
+local bootFiles, Component, Computer, Table, Math, Unicode, Pcall, Load, Select, Background, Foreground, white, spaces, keyDown, undefined, bootCandidates, False, gpuAndScreen, width, height, centerY, computerShutdown, selectedElement = {
     "/init.lua",
     "/OS.lua"
-}, component, computer, table, math, unicode, pcall, load, 0x002b36, 0x8cb9c5, 0xffffff, "    ", "key_down", "undefined"
+}, component, computer, table, math, unicode, pcall, load, select, 0x002b36, 0x8cb9c5, 0xffffff, "    ", "key_down", "undefined"
 
 local componentProxy, componentList, computerPullSignal, computerUptime, mathHuge, mathCeil, tableInsert, tablePack, tableConcat, unicodeLen, unicodeSub = Component.proxy, Component.list, Computer.pullSignal, computer.uptime, Math.huge, Math.ceil, Table.insert, Table.pack, Table.concat, Unicode.len, Unicode.sub
 
@@ -12,8 +12,8 @@ end
 
 local gpu, eeprom, internet, screen = proxy"gp" or {}, proxy"pr", proxy"in", proxy"sc"
 local gpuSetBackground, gpuSetForeground, eepromGetData, eepromSetData = gpu.setBackground, gpu.setForeground, eeprom.getData, eeprom.setData
-Computer.getBootAddress = eepromGetData
-Computer.setBootAddress = eepromSetData
+computer.getBootAddress = eepromGetData
+computer.setBootAddress = eepromSetData
 computerShutdown = function()
     Computer.shutdown()
 end
@@ -146,6 +146,7 @@ end,
 
 function(bootImage, alreadyBooting)
     local address = ternary(alreadyBooting, bootImage[3], unicodeSub(bootImage[3], 1, 3) .. "…")
+    
     if bootImage[4] then
         return ("Boot%s %s from %s (%s)"):format(ternary(alreadyBooting, "ing", ""), bootImage[5], bootImage[2], address)
     else
@@ -153,12 +154,12 @@ function(bootImage, alreadyBooting)
     end
 end,
 
-function(elements, border)
+function(elements, borderType)
     local allLen = 0
 
     for i = 1, #elements do
         local len = unicodeLen(elements[i].t)
-        allLen, elements[i].l = allLen + len + ternary(i == #elements, 0, ternary(border == 1, 6, 8)), len
+        allLen, elements[i].l = allLen + len + ternary(i == #elements, 0, ternary(borderType == 1, 6, 8)), len
     end
 
     return allLen
@@ -241,7 +242,7 @@ function(y, centrize, prefix)
                 cursorPos, cursorState = cursorPos + 1, 1
                 draw()
             elseif keys[29] and keys[46] then
-                error()
+                input = False
                 break
             else
                 cursorBlink(1)
@@ -261,9 +262,19 @@ function(y, centrize, prefix)
 end,
 
 function(...)
-    gpu.copy(1, 1, width, height - 1, 0, -1)
-    fill(1, height - 1, width, 1, " ")
-    set(1, height - 1, tableConcat({...}, spaces))
+    local text, lines = {...}
+
+    for i = 1, #text do
+        text[i] = tostring(text[i])
+    end
+
+    lines = split(tableConcat(text, spaces), 1)
+
+    for i = 1, #lines do
+        gpu.copy(1, 1, width, height - 1, 0, -1)
+        fill(1, height - 1, width, 1, " ")
+        set(1, height - 1, lines[i])
+    end
 end
 
 local function Error(err, func)
@@ -295,7 +306,7 @@ function(bootImage)
 end,
 
 function(address)
-    local proxy = select(2, Pcall(componentProxy, address))
+    local proxy = Select(2, Pcall(componentProxy, address))
 
     if proxy then
         tableInsert(bootCandidates, {proxy, proxy.getLabel() or undefined, address})
@@ -310,7 +321,7 @@ function(address)
     end
 end,
 
-function(elements, y, drawSelectedItem, border, onArrowKeyUpOrDown)
+function(elements, y, drawSelectedItem, borderType, onArrowKeyUpOrDown)
     return {
         o = drawSelectedItem,
         a = onArrowKeyUpOrDown,
@@ -320,17 +331,17 @@ function(elements, y, drawSelectedItem, border, onArrowKeyUpOrDown)
             fill(1, y - 1, width, 3, " ")
             Self.s = ternary(Self.s > #Self.e, #Self.e, Self.s)
             checkAction(Self.e[Self.s].d, Self)
-            local x, bigBorder = getCenterX(elementsLen(Self.e, border)), border == 1 and 1
+            local x, borderType, selectedItem = getCenterX(elementsLen(Self.e, borderType)), borderType == 1 and 1
 
             for i = 1, #Self.e do
-                local selectedItem = Self.o and (i == Self.s and Foreground)
+                selectedItem = Self.o and (i == Self.s and Foreground)
 
                 if selectedItem then
-                    fill(x - 3, y - ternary(bigBorder, 1, 0), Self.e[i].l + 6, ternary(bigBorder, 3, 1), " ", selectedItem)
+                    fill(x - 3, y - ternary(borderType, 1, 0), Self.e[i].l + 6, ternary(borderType, 3, 1), " ", selectedItem)
                 end
 
                 set(x, y, Self.e[i].t, selectedItem, selectedItem and Background)
-                x = x + Self.e[i].l + ternary(bigBorder, 6, 8)
+                x = x + Self.e[i].l + ternary(borderType, 6, 8)
             end
         end
     }
@@ -346,7 +357,8 @@ local function updateCandidates()
     end
 end
 
-local function main()
+updateCandidates()
+if status("Press S to stay in bootloader", False, 1, 31) then
     local bootables, options, draw
 
     bootables, draw = createElements({}, centerY - 2, 1, 1,
@@ -363,18 +375,18 @@ local function main()
     end
 
     for i = 1, #bootCandidates do
-        local label = cutLabel(bootCandidates[i][2])
-        tableInsert(bootables.e, {t = label, a = function(Self) boot(bootCandidates[Self.s]) end, d = function(Self)
-            local proxy = bootCandidates[Self.s][1]
-            local readOnly = proxy.isReadOnly()
+        tableInsert(bootables.e, {t = cutLabel(bootCandidates[i][2]), a = function(Self) boot(bootCandidates[Self.s]) end, d = function(Self)
+            local proxy, label, readOnly = bootCandidates[Self.s][1]
+            readOnly = proxy.isReadOnly()
             fill(1, centerY + 5, width, 3, " ")
             center(centerY + 5, bootFrom(bootCandidates[Self.s]), False, white)
             center(centerY + 7, ("Disk usage %s%% %s"):format(Math.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), ternary(readOnly, "R/O", "R/W")))
 
             options.e[4], options.e[5] = {t = "Rename", a =
             function()
-                local label = input(centerY + 9, 1, "New label: ") or undefined
-                if Pcall(proxy.setLabel, label) then
+                label = input(centerY + 9, 1, "New label: ")
+                if label and label ~= "" then
+                    proxy.setLabel(label)
                     label = cutLabel(label)
                     bootCandidates[bootables.s][2], bootables.e[bootables.s].t = label, label
                     bootables:d()
@@ -395,7 +407,7 @@ local function main()
         {t = "Shell", a =
             function()
 
-                local env = setmetatable({
+                local env, code = setmetatable({
                     print = print,
                     proxy = proxy,
                     sleep = function(timeout) sleep(timeout, 56) end
@@ -403,39 +415,23 @@ local function main()
 
                 clear()
                 ::loop::
-                    local code = input(height, False, "> ")
+                code = input(height, False, "> ")
 
-                    if code then
-                        set(1, height, ">")
-                        local success, data = execute(code, "=stdin", env)
-
-                        if success then
-                            if data.n > 0 then
-                                for i = 1, data.n do
-                                    data[i] = tostring(data[i])
-                                end
-
-                                print(tableConcat(data, spaces))
-                            end
-                        else
-                            local lines = split(data, 1)
-
-                            for i = 1, #lines do
-                                print(lines[i])
-                            end
-                        end
+                if code then
+                    set(1, height, ">")
+                    print(Select(2, execute(code, "=stdin", env)))
                     goto loop
                 end
                 draw()
             end
-        }, 
+        },
         {t = "Recovery", a =
             function()
-                local url = input(centerY + 9, 1, "Script URL: ")
+                local url, success, err = input(centerY + 9, 1, "Script URL: ")
 
                 if url and url ~= "" then
                     center(centerY + 9, "Downloading...", Background, white)
-                    local success, err = execute(request(url) or "", "=recovery.lua")
+                    success, err = execute(request(url) or "", "=recovery.lua")
 
                     if success then
                         draw()
@@ -454,11 +450,7 @@ local function main()
     )
     selectedElement = bootables
     draw()
-end
 
-updateCandidates()
-if status("Press S to stay in bootloader", False, 1, 31) then
-    main()
     while 1 do
         local signal = {computerPullSignal()}
 
@@ -475,7 +467,7 @@ if status("Press S to stay in bootloader", False, 1, 31) then
                 checkAction(selectedElement.a, selectedElement)
             elseif signal[4] == 63 then
                 updateCandidates()
-                main()
+                draw()
             elseif signal[4] == 28 then
                 checkAction(selectedElement.e[selectedElement.s].a, selectedElement)
             end
