@@ -477,5 +477,6 @@ end
 
 for i = 1, #bootCandidates do
     boot(bootCandidates[i])
+    computerShutdown()
 end
 Error("No bootable medium found")
