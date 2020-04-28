@@ -331,7 +331,7 @@ function(elements, y, drawSelectedItem, borderType, onArrowKeyUpOrDown)
             fill(1, y - 1, width, 3, " ")
             Self.s = ternary(Self.s > #Self.e, #Self.e, Self.s)
             checkAction(Self.e[Self.s].d, Self)
-            local x, borderType, selectedItem = getCenterX(elementsLen(Self.e, borderType)), borderType == 1 and 1
+            local x, selectedItem = getCenterX(elementsLen(Self.e, borderType)), borderType == 1 and 1 or False
 
             for i = 1, #Self.e do
                 selectedItem = Self.o and (i == Self.s and Foreground)
