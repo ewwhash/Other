@@ -6,7 +6,8 @@ local ejectSide = 1 -- Сторона, из которой будут извле
 local version = "selector" --В ерсия работы - selector для 1.7, paper - для версий выше 1.7
 
 local function proxy(componentType)
-    return component.proxy(component.list(componentType)())
+    local address = component.list(componentType)()
+    return address and component.proxy(address) or error("No component " .. componentType)
 end
 
 local inv, robot, redstone, chat, magnet = proxy("inventory_controller"), proxy("robot"), proxy("redstone"), proxy("chat"), proxy("tractor_beam")
