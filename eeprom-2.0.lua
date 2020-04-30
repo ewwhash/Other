@@ -1,14 +1,14 @@
 local COMPONENT, COMPUTER, LOAD, TABLE, MATH, UNICODE, BACKGROUND, FOREGROUND, white = component, computer, load, table, math, unicode, 0x002b36, 0x8cb9c5, 0xffffff
-local bootFiles, componentList, mathCeil, computerPullSignal, computerUptime, unicodeLen, proxy, execute, status, split, centerY, width, height, address = {
+local bootFiles, componentList, mathCeil, computerPullSignal, computerUptime, unicodeLen, proxy, execute, status, split, address, centerY, width, height = {
     "OS.lua",
     "init.lua"
-}, COMPONENT.list, MATH.ceil, UNICODE.len, COMPUTER.pullSignal, COMPUTER.uptime
+}, COMPONENT.list, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, UNICODE.len
 
 proxy, execute, split =
 
 function(componentType)
     address = componentList(componentType)()
-    return address and COMPONENT.proxy(componentType)
+    return address and COMPONENT.proxy(address)
 end,
 
 function(code, stdin, env)
@@ -51,7 +51,7 @@ COMPUTER.getBootAddress = eepromGetData
 
 if gpu and screen then
     gpu.bind((screen))
-    width, height = gpu.getMaxResolution()
+    width, height = gpu.maxResolution()
     centerY = height / 2
     gpu.setPaletteColor(9, BACKGROUND)
 end
@@ -79,12 +79,12 @@ function(len)
 end,
 
 function(y, text, background, foreground)
-    set(centrize(unicodeLen(text)), y, background, foreground)
+    set(centrize(unicodeLen(text)), y, text, background, foreground)
 end,
 
 function(text, title, wait, breakCode, onBreak)
     if gpu then
-        local lines, deadline, timeToSleep, y, signal = split(text), COMPUTER.uptime() + (wait or 0)
+        local lines, deadline, y, signal = split(text), COMPUTER.uptime() + (wait or 0)
         y = mathCeil(centerY - #lines / 2) + 1
         clear()
 
