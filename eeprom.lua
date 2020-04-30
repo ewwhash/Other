@@ -32,10 +32,6 @@ function(...)
     if internet then
         local handle, data, chunk = internet.request(...), ""
 
-        if not handle then
-            return
-        end
-
         ::loop::
             chunk = handle.read()
 
@@ -50,7 +46,7 @@ function(...)
 end,
 
 function(code, stdin, env)
-    local chunk, err = Load("return " .. code, stdin, False, env)
+    local chunk, err, data = Load("return " .. code, stdin, False, env)
 
     if not chunk then
         chunk, err = Load(code, stdin, False, env)
@@ -59,8 +55,7 @@ function(code, stdin, env)
 	if not chunk and err then
 		return False, err
 	else
-        local data = tablePack(xpcall(chunk, debug.traceback))
-
+        data = tablePack(xpcall(chunk, debug.traceback))
 
         if data[1] then
             Table.remove(data, 1)
@@ -131,9 +126,10 @@ function(y, text, background, foreground)
 end,
 
 function(timeout, breakCode, onBreak)
-    local deadline = computerUptime() + (timeout or 0)
+    local deadline, signal = computerUptime() + (timeout or 0)
+    
     repeat
-        local signal = {computerPullSignal(deadline - computerUptime())}
+        signal = {computerPullSignal(deadline - computerUptime())}
 
         if signal[1] == keyDown and (breakCode == 0 or signal[4] == breakCode) then
             if onBreak then
@@ -155,10 +151,10 @@ function(bootImage, alreadyBooting)
 end,
 
 function(elements, borderType)
-    local allLen = 0
+    local allLen, len = 0
 
     for i = 1, #elements do
-        local len = unicodeLen(elements[i].t)
+        len = unicodeLen(elements[i].t)
         allLen, elements[i].l = allLen + len + ternary(i == #elements, 0, ternary(borderType == 1, 6, 8)), len
     end
 
@@ -179,8 +175,8 @@ local status, input, print =
 
 function(text, title, wait, breakCode, onBreak)
     if gpuAndScreen then
-        local lines = split(text)
-        local y = mathCeil(centerY - #lines / 2) + 1
+        local lines, y = split(text)
+        y = mathCeil(centerY - #lines / 2) + 1
         clear()
         if title then
             center(y - 1, title, Background, white)
@@ -197,17 +193,17 @@ function(text, title, wait, breakCode, onBreak)
 end,
 
 function(y, centrize, prefix)
-    local input, keys, cursorState, cursorPos, prefixLen, x, allLen, cursorX = "", {}, 1, 1, unicodeLen(prefix or ""), 1
+    local input, keys, cursorState, cursorPos, prefixLen, x, allLen, cursorX, text, signal, cursorBlink, draw = "", {}, 1, 1, unicodeLen(prefix or ""), 1
 
-    local function cursorBlink(force)
+    cursorBlink = function(force)
         if allLen < width then
             cursorState, cursorX = force or not cursorState, x + prefixLen + cursorPos - 1
             set(cursorX, y, gpu.get(cursorX, y), ternary(cursorState, white, Background), ternary(cursorState, Background, white))
         end
     end
 
-    local function draw()
-        local text = prefix .. input
+    draw = function()
+        text = prefix .. input
         allLen = unicodeLen(text)
         fill(1, y, width, 1, " ")
         if centrize then
@@ -223,7 +219,7 @@ function(y, centrize, prefix)
     draw()
 
     while 1 do
-        local signal = {computerPullSignal(.6)}
+        signal = {computerPullSignal(.6)}
 
         if signal[1] == keyDown then
             keys[signal[4]] = 1
@@ -359,7 +355,7 @@ end
 
 updateCandidates()
 if status("Press S to stay in bootloader", False, 1, 31) then
-    local bootables, options, draw
+    local bootables, options, draw, signal
 
     bootables, draw = createElements({}, centerY - 2, 1, 1,
         function()
@@ -452,7 +448,7 @@ if status("Press S to stay in bootloader", False, 1, 31) then
     draw()
 
     while 1 do
-        local signal = {computerPullSignal()}
+        signal = {computerPullSignal()}
 
         if signal[1] == keyDown then
             if signal[4] == 203 and selectedElement.s > 1 then
