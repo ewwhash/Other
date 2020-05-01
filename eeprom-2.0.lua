@@ -1,8 +1,8 @@
 local COMPONENT, COMPUTER, LOAD, TABLE, MATH, UNICODE, BACKGROUND, FOREGROUND, white = component, computer, load, table, math, unicode, 0x002b36, 0x8cb9c5, 0xffffff
-local bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, tableInsert, mathHuge, address, gpuAndScreen, centerY, width, height, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, updateCandidates, bootPreview, boot = {
+local bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, mathHuge, address, gpuAndScreen, centerY, width, height, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, updateCandidates, bootPreview, boot = {
     "/OS.lua",
     "/init.lua"
-}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, TABLE.insert, MATH.huge
+}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, MATH.huge
 
 proxy, execute, split =
 
@@ -114,7 +114,7 @@ function(text, title, wait, breakCode, onBreak) -- status()
 end,
 
 function(err) -- ERROR()
-    return gpuAndScreen and status(err, "¯\\_(ツ)_/¯", mathHuge, 0, computerShutdown) or error(er)
+    return gpuAndScreen and status(err, "¯\\_(ツ)_/¯", mathHuge, 0, computerShutdown) or error(err)
 end,
 
 function(address) -- addCandidate()
@@ -161,7 +161,9 @@ function(image) -- boot()
         end
 
         status(bootPreview(image, 1), FALSE, .5, FALSE)
+        gpuSetPaletteColor(9, 0x336699)
         success, err = execute(data, "=" .. image[4])
+        gpuSetPaletteColor(9, BACKGROUND)
         if not success and err then
             ERROR(err)
         end
@@ -171,6 +173,10 @@ function(image) -- boot()
 end
 
 updateCandidates()
+status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
+    computer.pullSignal(math.huge)
+end)
+
 for i = 1, #bootCandidates do
     if boot(bootCandidates[i]) then
         computerShutdown()
