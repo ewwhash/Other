@@ -114,11 +114,7 @@ function(text, title, wait, breakCode, onBreak) -- status()
 end,
 
 function(err) -- ERROR()
-    if gpuAndScreen then
-        status(err, "¯\\_(ツ)_/¯", mathHuge, 0, computerShutdown)
-    else
-        error(err)
-    end
+    return gpuAndScreen and status(err, "¯\\_(ツ)_/¯", mathHuge, 0, computerShutdown) or error(er)
 end,
 
 function(address) -- addCandidate()
