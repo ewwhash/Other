@@ -44,7 +44,7 @@ function(text, tabulate)
 end
 
 local gpu, eeprom, screen = proxy"gp", proxy"pr", componentList"re"()
-local gpuSetBackground, gpuSetForeground, gpuSetPaletteColor, eepromSetData, eepromGetData = gpu.setBackground, gpu.setForeground, gpu.setPaletteColor, eeprom.setData, eeprom.getData
+local gpuSetBackground, gpuSetForeground, eepromSetData, eepromGetData = gpu.setBackground, gpu.setForeground, eeprom.setData, eeprom.getData
 
 COMPUTER.setBootAddress = eepromSetData
 COMPUTER.getBootAddress = eepromGetData
@@ -52,7 +52,7 @@ COMPUTER.getBootAddress = eepromGetData
 if gpu and screen then
     gpuAndScreen, width, height = gpu.bind((screen)), gpu.maxResolution()
     centerY = height / 2
-    gpuSetPaletteColor(9, BACKGROUND)
+    gpu.setPaletteColor(9, BACKGROUND)
 end
 
 set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, updateCandidates, cutText, bootPreview, boot =
@@ -156,14 +156,11 @@ function(image) -- boot()
         if chunk then
             data = data .. chunk
             goto LOOP
-        else
-            image[1].close(handle)
         end
 
+        image[1].close(handle)
         status(bootPreview(image, 1), FALSE, .5, FALSE)
-        gpuSetPaletteColor(9, 0x336699)
         success, err = execute(data, "=" .. image[4])
-        gpuSetPaletteColor(9, BACKGROUND)
         if not success and err then
             ERROR(err)
         end
@@ -174,7 +171,6 @@ end
 
 updateCandidates()
 status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
-    computer.pullSignal(math.huge)
 end)
 
 for i = 1, #bootCandidates do
