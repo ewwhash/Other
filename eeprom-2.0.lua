@@ -1,8 +1,8 @@
 local COMPONENT, COMPUTER, LOAD, TABLE, MATH, UNICODE, BACKGROUND, FOREGROUND, white = component, computer, load, table, math, unicode, 0x002b36, 0x8cb9c5, 0xffffff
-local bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, address, gpuAndScreen, centerY, width, height, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, candidatesUpdate, bootPreview, boot = {
-    "OS.lua",
-    "init.lua"
-}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len
+local bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, tableInsert, mathHuge, address, gpuAndScreen, centerY, width, height, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, updateCandidates, bootPreview, boot = {
+    "/OS.lua",
+    "/init.lua"
+}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, TABLE.insert, MATH.huge
 
 proxy, execute, split =
 
@@ -12,10 +12,10 @@ function(componentType)
 end,
 
 function(code, stdin, env)
-    local chunk, err, data = LOAD("return " .. code, stdin, False, env)
+    local chunk, err, data = LOAD("return " .. code, stdin, FALSE, env)
 
     if not chunk then
-        chunk, err = LOAD(code, stdin, False, env)
+        chunk, err = LOAD(code, stdin, FALSE, env)
     end
 
     if chunk then
@@ -26,10 +26,10 @@ function(code, stdin, env)
             data.n = data.n - 1
             return 1, data
         else
-            return False, data[2]
+            return FALSE, data[2]
         end
     else
-        return False, err
+        return FALSE, err
     end
 end,
 
@@ -55,7 +55,7 @@ if gpu and screen then
     gpuSetPaletteColor(9, BACKGROUND)
 end
 
-set, fill, clear, centrize, centrizedSet, status, ERROR, candidatesUpdate, bootPreview, boot =
+set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, updateCandidates, cutText, bootPreview, boot =
 
 function(x, y, string, background, foreground) -- set()
     gpuSetBackground(background or BACKGROUND)
@@ -115,25 +115,69 @@ end,
 
 function(err) -- ERROR()
     if gpuAndScreen then
-        status(err, "¯\\_(ツ)_/¯", MATH.huge, 0, computerShutdown)
+        status(err, "¯\\_(ツ)_/¯", mathHuge, 0, computerShutdown)
     else
         error(err)
     end
-end, 
+end,
 
-function() -- candidatesUpdate()
-    for filesystem in pairs(componentList("le")) do
+function(address) -- addCandidate()
+    local proxy = componentProxy(address)
+    bootCandidates[#bootCandidates + 1] = {
+        proxy, proxy.getLabel() or "N/A", address
+    }
+
+    for i = 1, #bootFiles do
+        if proxy.exists(bootFiles[i]) then
+            bootCandidates[#bootCandidates][4] = bootFiles[i]
+        end
     end
-end, 
+end,
 
-function() -- bootPreview()
+function() -- updateCandidates()
+    addCandidate(eepromGetData())
+    for filesystem in pairs(componentList("le")) do
+        addCandidate(filesystem)
+    end
+end,
+
+function(text, maxLength) -- cutText()
+    return unicodeLen(text) > maxLength and UNICODE.sub(text, 1, maxLength) .. "…" or text
+end,
+
+function(image, booting) -- bootPreview()
+    address = cutText(image[3], booting and 36 or 6)
+    return image[4] and ("Boot%s %s from %s (%s)"):format(booting and "ing" or "", image[4], image[2], address) or ("Boot from %s (%s) is not available"):format(image[2], address)
 end,
 
 function(image) -- boot()
+    if image[4] then
+        local handle, data, chunk, success, err = image[1].open(image[4], "r"), ""
+
+        ::LOOP::
+        chunk = image[1].read(handle, mathHuge)
+
+        if chunk then
+            data = data .. chunk
+            goto LOOP
+        else
+            image[1].close(handle)
+        end
+
+        status(bootPreview(image, 1), FALSE, .5, FALSE)
+        success, err = execute(data, "=" .. image[4])
+        if not success and err then
+            ERROR(err)
+        end
+
+        return 1
+    end
 end
 
-for i = 1, #bootCandidates do 
-    boot(bootCandidates[i])
-    computerShutdown()
+updateCandidates()
+for i = 1, #bootCandidates do
+    if boot(bootCandidates[i]) then
+        computerShutdown()
+    end
 end
 ERROR("No bootable medium found!")
