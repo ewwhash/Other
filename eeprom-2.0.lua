@@ -100,7 +100,7 @@ function(text, title, wait, breakCode, onBreak, booting) -- status()
         while wait do
             signal = {computerPullSignal(deadline - COMPUTER.uptime())}
 
-            if signal[1] == "key_down" and signal[4] == breakCode or breakCode == 0 then
+            if signal[1] == "key_down" and (signal[4] == breakCode or breakCode == 0) then
                 if onBreak then
                     onBreak()
                 end
@@ -127,13 +127,16 @@ end,
 
 function(address) -- addCandidate()
     local proxy = componentProxy(address)
-    bootCandidates[#bootCandidates + 1] = {
-        proxy, proxy.getLabel() or "N/A", address
-    }
 
-    for i = 1, #bootFiles do
-        if proxy.exists(bootFiles[i]) then
-            bootCandidates[#bootCandidates][4] = bootFiles[i]
+    if proxy then
+        bootCandidates[#bootCandidates + 1] = {
+            proxy, proxy.getLabel() or "N/A", address
+        }
+
+        for i = 1, #bootFiles do
+            if proxy.exists(bootFiles[i]) then
+                bootCandidates[#bootCandidates][4] = bootFiles[i]
+            end
         end
     end
 end,
