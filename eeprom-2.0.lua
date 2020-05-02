@@ -44,7 +44,7 @@ function(text, tabulate)
 end
 
 local gpu, eeprom, screen = proxy"gp", proxy"pr", componentList"re"()
-local gpuSetBackground, gpuSetForeground, eepromSetData, eepromGetData = gpu.setBackground, gpu.setForeground, eeprom.setData, eeprom.getData
+local gpuSet, gpuSetBackground, gpuSetForeground, gpuSetPaletteColor, eepromSetData, eepromGetData = gpu.set, gpu.setBackground, gpu.setForeground, gpu.setPaletteColor, eeprom.setData, eeprom.getData
 
 COMPUTER.setBootAddress = eepromSetData
 COMPUTER.getBootAddress = eepromGetData
@@ -52,7 +52,7 @@ COMPUTER.getBootAddress = eepromGetData
 if gpu and screen then
     gpuAndScreen, width, height = gpu.bind((screen)), gpu.maxResolution()
     centerY = height / 2
-    gpu.setPaletteColor(9, BACKGROUND)
+    gpuSetPaletteColor(9, BACKGROUND)
 end
 
 set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, updateCandidates, cutText, bootPreview, boot =
@@ -81,7 +81,7 @@ function(y, text, background, foreground) -- centrizedSet()
     set(centrize(unicodeLen(text)), y, text, background, foreground)
 end,
 
-function(text, title, wait, breakCode, onBreak) -- status()
+function(text, title, wait, breakCode, onBreak, booting) -- status()
     if gpuAndScreen then
         local lines, deadline, y, signal = split(text), COMPUTER.uptime() + (wait or 0)
         y = mathCeil(centerY - #lines / 2) + 1
@@ -107,6 +107,14 @@ function(text, title, wait, breakCode, onBreak) -- status()
 
                 break
             elseif computerUptime() >= deadline then
+                if booting then
+                    gpu.set = function(...)
+                        gpuSetPaletteColor(9, 0x336699)
+                        gpuSet(...)
+                        gpu.set = gpuSet
+                        computer.beep()
+                    end
+                end
                 break
             end
         end
@@ -159,8 +167,10 @@ function(image) -- boot()
         end
 
         image[1].close(handle)
-        status(bootPreview(image, 1), FALSE, .5, FALSE)
+        status(bootPreview(image, 1), FALSE, .5, FALSE, FALSE, 1)
         success, err = execute(data, "=" .. image[4])
+        gpuSetPaletteColor(9, BACKGROUND)
+
         if not success and err then
             ERROR(err)
         end
