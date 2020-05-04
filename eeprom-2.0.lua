@@ -1,4 +1,4 @@
-local COMPONENT, COMPUTER, LOAD, TABLE, MATH, UNICODE, BACKGROUND, FOREGROUND, white = component, computer, load, table, math, unicode, 0x002b36, 0x8cb9c5, 0xffffff
+local COMPONENT, COMPUTER, LOAD, TABLE, MATH, UNICODE, SELECT, BACKGROUND, FOREGROUND, white = component, computer, load, table, math, unicode, select, 0x002b36, 0x8cb9c5, 0xffffff
 local bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, mathHuge, keyDown, address, gpuAndScreen, selectedElementsLine, centerY, width, height, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, updateCandidates, bootPreview, boot, createElements, main = {
     "/OS.lua",
     "/init.lua"
@@ -98,9 +98,7 @@ function(text, title, wait, breakCode, onBreak, booting) -- status()
         end
 
         while wait do
-            signal = {computerPullSignal(computerUptime() - deadline)}
-
-            if signal[1] == keyDown and (signal[4] == breakCode or breakCode == 0) then
+            if SELECT(4, computerPullSignal(computerUptime() - deadline)) == breakCode or breakCode == 0 then
                 if onBreak then
                     onBreak()
                 end
@@ -182,13 +180,14 @@ function(image) -- boot()
     end
 end,
 
-function(elements, y, borderType) -- createElements()
+function(elements, y, borderType, onArrowKeyUpOrDown) -- createElements()
     -- borderType - 1 == small border
     -- borderType - 2 == big border
 
     return {
         e = elements,
         s = 0,
+        k = onArrowKeyUpOrDown,
         d = function(SELF) -- draw()
             fill(1, y - 1, width, 3, " ", BACKGROUND)
             selectedElementsLine = SELF
@@ -228,10 +227,27 @@ function() -- main()
         {t = "BLOCKED"},
         {t = "AND"},
         {t = "DOESN'T EXISTS"}
-    }, centerY + 2, 1)
+    }, centerY + 2, 1, function(keyState)
+        if keyState == 0 then
+            selectedElementsLine = drives
+            options.s = 0
+            drives.s = mathCeil(#drives.e / 2)
+            options:d()
+            drives:d()
+        end
+    end)
 
-    drives = createElements({}, centerY - 2, 2)
-    
+    drives = createElements({}, centerY - 2, 2, function(keyState)
+        if keyState == 1 then
+            selectedElementsLine = options
+            drives.s = 0
+            options.s = mathCeil(#options.e / 2)
+            error(#options.e)
+            drives:d()
+            options:d()
+        end
+    end)
+
     for i = 1, #bootCandidates do
         drives.e[i] = {t = bootCandidates[i][2]}
     end
@@ -239,15 +255,14 @@ function() -- main()
     options:d()
     drives:d()
 
-    while 1 do
+    ::LOOP::
         signalType, _, _, code = computerPullSignal()
-    
 
         if signalType == keyDown then
             if code == 200 then -- Up
-
+                selectedElementsLine.k(0)
             elseif code == 208 then -- Down
-
+                selectedElementsLine.k(1)
             elseif code == 203 and selectedElementsLine.s > 1 then -- Left
                 selectedElementsLine.s = selectedElementsLine.s - 1
                 selectedElementsLine:d()
@@ -255,9 +270,10 @@ function() -- main()
                 selectedElementsLine.s = selectedElementsLine.s + 1
                 selectedElementsLine:d()
             elseif code == 28 then -- Enter
+                selectedElementsLine.e[selectedElementsLine.s].a()
             end 
         end
-    end
+    goto LOOP
 end
 
 updateCandidates()
