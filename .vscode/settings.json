@@ -5,7 +5,9 @@
         "socket",
         "bit32",
         "checkArg",
-        "False"
+        "False",
+        "FALSE",
+        "computer"
     ],
     "Lua.diagnostics.disable": [
         "lowercase-global"

@@ -1,8 +1,8 @@
 local COMPONENT, COMPUTER, LOAD, TABLE, MATH, UNICODE, BACKGROUND, FOREGROUND, white = component, computer, load, table, math, unicode, 0x002b36, 0x8cb9c5, 0xffffff
-local bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, mathHuge, address, gpuAndScreen, centerY, width, height, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, updateCandidates, bootPreview, boot = {
+local bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, mathHuge, keyDown, address, gpuAndScreen, selectedElementsLine, centerY, width, height, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, updateCandidates, bootPreview, boot, createElements, main = {
     "/OS.lua",
     "/init.lua"
-}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, MATH.huge
+}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, MATH.huge, "key_down"
 
 proxy, execute, split =
 
@@ -55,7 +55,7 @@ if gpu and screen then
     gpuSetPaletteColor(9, BACKGROUND)
 end
 
-set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, updateCandidates, cutText, bootPreview, boot =
+set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, updateCandidates, cutText, bootPreview, boot, createElements, main =
 
 function(x, y, string, background, foreground) -- set()
     gpuSetBackground(background or BACKGROUND)
@@ -83,7 +83,7 @@ end,
 
 function(text, title, wait, breakCode, onBreak, booting) -- status()
     if gpuAndScreen then
-        local lines, deadline, y, signal = split(text), COMPUTER.uptime() + (wait or 0)
+        local lines, deadline, y, signal = split(text), computerUptime() + (wait or 0)
         y = mathCeil(centerY - #lines / 2) + 1
         clear()
 
@@ -98,9 +98,9 @@ function(text, title, wait, breakCode, onBreak, booting) -- status()
         end
 
         while wait do
-            signal = {computerPullSignal(deadline - COMPUTER.uptime())}
+            signal = {computerPullSignal(computerUptime() - deadline)}
 
-            if signal[1] == "key_down" and (signal[4] == breakCode or breakCode == 0) then
+            if signal[1] == keyDown and (signal[4] == breakCode or breakCode == 0) then
                 if onBreak then
                     onBreak()
                 end
@@ -112,7 +112,6 @@ function(text, title, wait, breakCode, onBreak, booting) -- status()
                         gpuSetPaletteColor(9, 0x336699)
                         gpuSet(...)
                         gpu.set = gpuSet
-                        computer.beep()
                     end
                 end
                 break
@@ -143,6 +142,7 @@ end,
 
 function() -- updateCandidates()
     addCandidate(eepromGetData())
+    
     for filesystem in pairs(componentList("le")) do
         addCandidate(filesystem)
     end
@@ -180,11 +180,88 @@ function(image) -- boot()
 
         return 1
     end
+end,
+
+function(elements, y, borderType) -- createElements()
+    -- borderType - 1 == small border
+    -- borderType - 2 == big border
+
+    return {
+        e = elements,
+        s = 0,
+        d = function(SELF) -- draw()
+            fill(1, y - 1, width, 3, " ", BACKGROUND)
+            selectedElementsLine = SELF
+            local elementsAndBorderLength, borderSpaces, elementLength, x, selectedElement, element = 0, borderType == 1 and 6 or 8
+
+            for i = 1, #SELF.e do
+                elementsAndBorderLength = elementsAndBorderLength + unicodeLen(SELF.e[i].t) + borderSpaces
+            end
+
+            elementsAndBorderLength = elementsAndBorderLength -  borderSpaces
+
+            x = centrize(elementsAndBorderLength)
+
+            for i = 1, #SELF.e do
+                selectedElement, element = SELF.s == i and 1, SELF.e[i]
+                elementLength = unicodeLen(element.t)
+
+                if selectedElement then
+                    fill(x - borderSpaces / 2, y - (borderType == 1 and 0 or 1), elementLength + borderSpaces, borderType == 1 and 1 or 3, " ", FOREGROUND)
+                    set(x, y, element.t, FOREGROUND, BACKGROUND)
+                else
+                    set(x, y, element.t, BACKGROUND, FOREGROUND)
+                end
+
+                x = x + elementLength + borderSpaces
+            end
+        end
+    }
+end,
+
+function() -- main()
+    clear()
+    local signalType, code, options, drives, _
+
+    options = createElements({
+        {t = "OMSK"},
+        {t = "BLOCKED"},
+        {t = "AND"},
+        {t = "DOESN'T EXISTS"}
+    }, centerY + 2, 1)
+
+    drives = createElements({}, centerY - 2, 2)
+    
+    for i = 1, #bootCandidates do
+        drives.e[i] = {t = bootCandidates[i][2]}
+    end
+
+    options:d()
+    drives:d()
+
+    while 1 do
+        signalType, _, _, code = computerPullSignal()
+    
+
+        if signalType == keyDown then
+            if code == 200 then -- Up
+
+            elseif code == 208 then -- Down
+
+            elseif code == 203 and selectedElementsLine.s > 1 then -- Left
+                selectedElementsLine.s = selectedElementsLine.s - 1
+                selectedElementsLine:d()
+            elseif code == 205 and selectedElementsLine.s < #selectedElementsLine.e then -- Right
+                selectedElementsLine.s = selectedElementsLine.s + 1
+                selectedElementsLine:d()
+            elseif code == 28 then -- Enter
+            end 
+        end
+    end
 end
 
 updateCandidates()
-status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
-end)
+status("Press ALT to stay in bootloader", FALSE, .5, 56, main)
 
 for i = 1, #bootCandidates do
     if boot(bootCandidates[i]) then
