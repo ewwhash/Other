@@ -1,5 +1,5 @@
 local COMPONENT, COMPUTER, LOAD, TABLE, MATH, UNICODE, SELECT, BACKGROUND, FOREGROUND, white = component, computer, load, table, math, unicode, select, 0x002b36, 0x8cb9c5, 0xffffff
-local bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, mathHuge, keyDown, address, gpuAndScreen, selectedElementsLine, centerY, width, height, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, updateCandidates, bootPreview, boot, createElements, main = {
+local bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, mathHuge, keyDown, address, gpuAndScreen, selectedElementsLine, centerY, width, height, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, updateCandidates, bootPreview, boot, createElements = {
     "/OS.lua",
     "/init.lua"
 }, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, MATH.huge, "key_down"
@@ -55,7 +55,7 @@ if gpu and screen then
     gpuSetPaletteColor(9, BACKGROUND)
 end
 
-set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, updateCandidates, cutText, bootPreview, boot, createElements, main =
+set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, updateCandidates, cutText, bootPreview, boot, createElements =
 
 function(x, y, string, background, foreground) -- set()
     gpuSetBackground(background or BACKGROUND)
@@ -186,9 +186,9 @@ function(elements, y, borderType, onArrowKeyUpOrDown) -- createElements()
 
     return {
         e = elements,
-        s = 0,
+        s = 1,
         k = onArrowKeyUpOrDown,
-        d = function(SELF) -- draw()
+        d = function(SELF, withoutBorder) -- draw()
             fill(1, y - 1, width, 3, " ", BACKGROUND)
             selectedElementsLine = SELF
             local elementsAndBorderLength, borderSpaces, elementLength, x, selectedElement, element = 0, borderType == 1 and 6 or 8
@@ -205,7 +205,7 @@ function(elements, y, borderType, onArrowKeyUpOrDown) -- createElements()
                 selectedElement, element = SELF.s == i and 1, SELF.e[i]
                 elementLength = unicodeLen(element.t)
 
-                if selectedElement then
+                if selectedElement and not withoutBorder then
                     fill(x - borderSpaces / 2, y - (borderType == 1 and 0 or 1), elementLength + borderSpaces, borderType == 1 and 1 or 3, " ", FOREGROUND)
                     set(x, y, element.t, FOREGROUND, BACKGROUND)
                 else
@@ -216,23 +216,21 @@ function(elements, y, borderType, onArrowKeyUpOrDown) -- createElements()
             end
         end
     }
-end,
+end
 
-function() -- main()
+updateCandidates()
+status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
+    ::REFRESH::
     clear()
     local signalType, code, options, drives, _
 
     options = createElements({
-        {t = "OMSK"},
-        {t = "BLOCKED"},
-        {t = "AND"},
-        {t = "DOESN'T EXISTS"}
+        {t = "Power off", a = computerShutdown},
+        {t = "Recovery", a = function() end},
     }, centerY + 2, 1, function(keyState)
         if keyState == 0 then
             selectedElementsLine = drives
-            options.s = 0
-            drives.s = mathCeil(#drives.e / 2)
-            options:d()
+            options:d(1)
             drives:d()
         end
     end)
@@ -240,10 +238,7 @@ function() -- main()
     drives = createElements({}, centerY - 2, 2, function(keyState)
         if keyState == 1 then
             selectedElementsLine = options
-            drives.s = 0
-            options.s = mathCeil(#options.e / 2)
-            error(#options.e)
-            drives:d()
+            drives:d(1)
             options:d()
         end
     end)
@@ -252,8 +247,9 @@ function() -- main()
         drives.e[i] = {t = bootCandidates[i][2]}
     end
 
-    options:d()
+    options:d(1)
     drives:d()
+    centrizedSet(height, "Use ← ↑ → keys to move cursor; Enter to do something; F5 to refresh")
 
     ::LOOP::
         signalType, _, _, code = computerPullSignal()
@@ -271,13 +267,12 @@ function() -- main()
                 selectedElementsLine:d()
             elseif code == 28 then -- Enter
                 selectedElementsLine.e[selectedElementsLine.s].a()
-            end 
+            elseif code == 63 then
+                goto REFRESH
+            end
         end
     goto LOOP
-end
-
-updateCandidates()
-status("Press ALT to stay in bootloader", FALSE, .5, 56, main)
+end)
 
 for i = 1, #bootCandidates do
     if boot(bootCandidates[i]) then
