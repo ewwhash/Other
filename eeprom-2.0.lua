@@ -1,8 +1,8 @@
-local COMPONENT, COMPUTER, LOAD, TABLE, MATH, UNICODE, SELECT, BACKGROUND, FOREGROUND, white = component, computer, load, table, math, unicode, select, 0x002b36, 0x8cb9c5, 0xffffff
-local bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, mathHuge, keyDown, address, gpuAndScreen, selectedElementsLine, centerY, width, height, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, updateCandidates, bootPreview, boot, createElements = {
+local COMPONENT, COMPUTER, MATH, UNICODE, BACKGROUND, FOREGROUND, white = component, computer, math, unicode, 0x002b36, 0x8cb9c5, 0xffffff
+local bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, unicodeSub, mathHuge, keyDown, keyUp, address, gpuAndScreen, selectedElementsLine, centerY, width, height, proxy, execute, split, request, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, input, updateCandidates, bootPreview, boot, createElements = {
     "/OS.lua",
     "/init.lua"
-}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, MATH.huge, "key_down"
+}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, UNICODE.sub, MATH.huge, "key_down", "key_up"
 
 proxy, execute, split =
 
@@ -12,22 +12,10 @@ function(componentType)
 end,
 
 function(code, stdin, env)
-    local chunk, err, data = LOAD("return " .. code, stdin, FALSE, env)
-
-    if not chunk then
-        chunk, err = LOAD(code, stdin, FALSE, env)
-    end
+    local chunk, err = load(code, stdin, FALSE, env)
 
     if chunk then
-        data = TABLE.pack(xpcall(chunk, debug.traceback))
-
-        if data[1] then
-            TABLE.remove(data, 1)
-            data.n = data.n - 1
-            return 1, data
-        else
-            return FALSE, data[2]
-        end
+        return xpcall(chunk, debug.traceback)
     else
         return FALSE, err
     end
@@ -43,19 +31,39 @@ function(text, tabulate)
     return lines
 end
 
-local gpu, eeprom, screen = proxy"gp", proxy"pr", componentList"re"()
+local gpu, eeprom, internet, screen = proxy"gp" or {}, proxy"pr", proxy"in", componentList"re"()
 local gpuSet, gpuSetBackground, gpuSetForeground, gpuSetPaletteColor, eepromSetData, eepromGetData = gpu.set, gpu.setBackground, gpu.setForeground, gpu.setPaletteColor, eeprom.setData, eeprom.getData
 
 COMPUTER.setBootAddress = eepromSetData
 COMPUTER.getBootAddress = eepromGetData
 
-if gpu and screen then
+if gpuSet and screen then
     gpuAndScreen, width, height = gpu.bind((screen)), gpu.maxResolution()
     centerY = height / 2
     gpuSetPaletteColor(9, BACKGROUND)
 end
 
-set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, updateCandidates, cutText, bootPreview, boot, createElements =
+request, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, updateCandidates, cutText, input, bootPreview, boot, createElements =
+
+function(url) -- request()
+    if internet then
+        local handle, data, chunk = internet.request(url), ""
+
+        ::LOOP::
+        chunk = handle.read()
+
+        if chunk then
+            data = data .. chunk
+            goto LOOP
+        end
+
+        handle.close()
+
+        return data
+    else
+        return status("This option requires internet card", FALSE, mathHuge, 0)
+    end
+end,
 
 function(x, y, string, background, foreground) -- set()
     gpuSetBackground(background or BACKGROUND)
@@ -83,7 +91,8 @@ end,
 
 function(text, title, wait, breakCode, onBreak, booting) -- status()
     if gpuAndScreen then
-        local lines, deadline, y, signal = split(text), computerUptime() + (wait or 0)
+        gpuSetPaletteColor(9, BACKGROUND)
+        local lines, deadline, y, signalType, code, _ = split(text), computerUptime() + (wait or 0)
         y = mathCeil(centerY - #lines / 2) + 1
         clear()
 
@@ -98,14 +107,16 @@ function(text, title, wait, breakCode, onBreak, booting) -- status()
         end
 
         while wait do
-            if SELECT(4, computerPullSignal(computerUptime() - deadline)) == breakCode or breakCode == 0 then
+            signalType, _, _, code = computerPullSignal(computerUptime() - deadline)
+
+            if signalType == keyDown and (code == breakCode or breakCode == 0) then
                 if onBreak then
                     onBreak()
                 end
 
                 break
             elseif computerUptime() >= deadline then
-                if booting then
+                if booting and gpuAndScreen then
                     gpu.set = function(...)
                         gpuSetPaletteColor(9, 0x336699)
                         gpuSet(...)
@@ -139,15 +150,47 @@ function(address) -- addCandidate()
 end,
 
 function() -- updateCandidates()
+    bootCandidates = {}
     addCandidate(eepromGetData())
-    
+
     for filesystem in pairs(componentList("le")) do
-        addCandidate(filesystem)
+        addCandidate(eepromGetData() ~= filesystem and filesystem or "")
     end
 end,
 
 function(text, maxLength) -- cutText()
-    return unicodeLen(text) > maxLength and UNICODE.sub(text, 1, maxLength) .. "…" or text
+    return unicodeLen(text) > maxLength and unicodeSub(text, 1, maxLength) .. "…" or text
+end,
+
+function(prefix, y) -- input()
+    local text, prefixLen, cursorState, signalType, char, _ = "", unicodeLen(prefix), FALSE
+
+    while 1 do
+        signalType, _, char = computerPullSignal(.5)
+
+        if signalType == keyDown then
+            if char == 13 then
+                break
+            elseif char >= 32 then
+                text = text .. UNICODE.char(char)
+            elseif char == 8 then
+                text = unicodeSub(text, 1, unicodeLen(text) - 1)
+            end
+
+            cursorState = 1
+        elseif signalType == "clipboard" then
+            text = text .. char
+            cursorState = 1
+        elseif signalType ~= keyUp then
+            cursorState = not cursorState
+        end
+
+        fill(1, y, width, 1, " ")
+        set(centrize(prefixLen + unicodeLen(text)), y, prefix .. text .. (cursorState and "█" or ""), BACKGROUND, white)
+    end
+
+    fill(1, y, width, 1, " ")
+    return text
 end,
 
 function(image, booting) -- bootPreview()
@@ -157,6 +200,9 @@ end,
 
 function(image) -- boot()
     if image[4] then
+        if eepromGetData() ~= image[3] then
+            eepromSetData(image[3])
+        end
         local handle, data, chunk, success, err = image[1].open(image[4], "r"), ""
 
         ::LOOP::
@@ -170,7 +216,6 @@ function(image) -- boot()
         image[1].close(handle)
         status(bootPreview(image, 1), FALSE, .5, FALSE, FALSE, 1)
         success, err = execute(data, "=" .. image[4])
-        gpuSetPaletteColor(9, BACKGROUND)
 
         if not success and err then
             ERROR(err)
@@ -180,7 +225,7 @@ function(image) -- boot()
     end
 end,
 
-function(elements, y, borderType, onArrowKeyUpOrDown) -- createElements()
+function(elements, y, borderType, onArrowKeyUpOrDown, onElementSelected) -- createElements()
     -- borderType - 1 == small border
     -- borderType - 2 == big border
 
@@ -188,17 +233,20 @@ function(elements, y, borderType, onArrowKeyUpOrDown) -- createElements()
         e = elements,
         s = 1,
         k = onArrowKeyUpOrDown,
-        d = function(SELF, withoutBorder) -- draw()
+        d = function(SELF, withoutBorder, withoutSelect) -- draw()
             fill(1, y - 1, width, 3, " ", BACKGROUND)
-            selectedElementsLine = SELF
+            selectedElementsLine = withoutSelect and selectedElementsLine or SELF
             local elementsAndBorderLength, borderSpaces, elementLength, x, selectedElement, element = 0, borderType == 1 and 6 or 8
+
+            if onElementSelected then
+                onElementSelected(SELF)
+            end
 
             for i = 1, #SELF.e do
                 elementsAndBorderLength = elementsAndBorderLength + unicodeLen(SELF.e[i].t) + borderSpaces
             end
 
             elementsAndBorderLength = elementsAndBorderLength -  borderSpaces
-
             x = centrize(elementsAndBorderLength)
 
             for i = 1, #SELF.e do
@@ -218,38 +266,86 @@ function(elements, y, borderType, onArrowKeyUpOrDown) -- createElements()
     }
 end
 
-updateCandidates()
 status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
     ::REFRESH::
-    clear()
-    local signalType, code, options, drives, _
+    updateCandidates()
+    local signalType, code, options, drives, draw, bootImage, proxy, readOnly, newLabel, cmdOrUrl, data, _
 
     options = createElements({
-        {t = "Power off", a = computerShutdown},
-        {t = "Recovery", a = function() end},
+        {t = "Power off", a = function() computerShutdown() end}, -- Это сделано, потому что я вызываю функцию через :, туда вставляется self, и из-за этого компьютер перезагружается, а не выключается
+        {t = "Execute", a = function()
+            cmdOrUrl = input("Cmd or URL: ", centerY + 7)
+            
+            if cmdOrUrl:match("http[s]?://") then
+                status("Downloading...")
+                code = request(cmdOrUrl)
+            else
+                code = cmdOrUrl
+            end
+
+            _, data = execute(code, "=stdin")
+            status((data == "" or not data and "is empty") or data, "Command result", mathHuge, 0)
+            draw(FALSE, FALSE, 1, 1)
+        end}
     }, centerY + 2, 1, function(keyState)
         if keyState == 0 then
             selectedElementsLine = drives
-            options:d(1)
-            drives:d()
+            draw(1, 1, FALSE, FALSE)
         end
     end)
 
     drives = createElements({}, centerY - 2, 2, function(keyState)
         if keyState == 1 then
             selectedElementsLine = options
-            drives:d(1)
-            options:d()
+            draw(FALSE, FALSE, 1, 1)
         end
+    end, function(SELF)
+        bootImage = bootCandidates[SELF.s]
+        proxy = bootImage[1]
+        readOnly = proxy.isReadOnly()
+
+        fill(1, centerY + 5, width, 3, " ")
+        centrizedSet(centerY + 5, bootPreview(bootImage), FALSE, white)
+        centrizedSet(centerY + 7, ("Disk usage %s%% %s"):format(MATH.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "R/O" or"R/W"))
+
+        if readOnly then
+            if options.s > 2 then
+                options.s = 2
+            end
+            options.e[3] = FALSE
+            options.e[4] = FALSE
+        else
+            options.e[3] = {t = "Rename", a = function()
+                newLabel = input("New label: ", centerY + 9)
+
+                if newLabel and newLabel ~= "" then
+                    pcall(proxy.setLabel, newLabel)
+                    bootImage[2] = cutText(newLabel, 16)
+                    drives.e[SELF.s].t = cutText(newLabel, 6)
+                    drives:d(1, 1)
+                    options:d()
+                end
+            end}
+            options.e[4] = {t = "Format", a = function() proxy.remove("/") drives:d(1, 1) options:d() end}
+        end
+
+        options:d(1, 1)
     end)
 
     for i = 1, #bootCandidates do
-        drives.e[i] = {t = bootCandidates[i][2]}
+        drives.e[i] = {t = cutText(bootCandidates[i][2], 6), a = function(SELF)
+            boot(bootCandidates[SELF.s])
+        end}
     end
 
-    options:d(1)
-    drives:d()
-    centrizedSet(height, "Use ← ↑ → keys to move cursor; Enter to do something; F5 to refresh")
+    draw = function(optionsWithoutBorder, optionsWithoutSelect, drivesWithoutBorder, drivesWithoutSelect)
+        clear()
+        drives:d(drivesWithoutBorder, drivesWithoutSelect)
+        options:d(optionsWithoutBorder, optionsWithoutSelect)
+        centrizedSet(height, "Use ← ↑ → keys to move cursor; Enter to do something; F5 to refresh")
+    end
+
+    draw(1, 1)
 
     ::LOOP::
         signalType, _, _, code = computerPullSignal()
@@ -266,7 +362,7 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
                 selectedElementsLine.s = selectedElementsLine.s + 1
                 selectedElementsLine:d()
             elseif code == 28 then -- Enter
-                selectedElementsLine.e[selectedElementsLine.s].a()
+                selectedElementsLine.e[selectedElementsLine.s].a(selectedElementsLine)
             elseif code == 63 then
                 goto REFRESH
             end
@@ -274,6 +370,7 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
     goto LOOP
 end)
 
+updateCandidates()
 for i = 1, #bootCandidates do
     if boot(bootCandidates[i]) then
         computerShutdown()
