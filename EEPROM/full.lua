@@ -1,8 +1,5 @@
 local COMPONENT, COMPUTER, MATH, UNICODE, BACKGROUND, FOREGROUND, white = component, computer, math, unicode, 0x002b36, 0x8cb9c5, 0xffffff
-local bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, unicodeSub, mathHuge, keyDown, keyUp, address, gpuAndScreen, selectedElementsLine, centerY, width, height, proxy, execute, split, request, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, input, updateCandidates, bootPreview, boot, createElements = {
-    "/OS.lua",
-    "/init.lua"
-}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, UNICODE.sub, MATH.huge, "key_down", "key_up"
+local password, passwordOnBoot, bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, unicodeSub, mathHuge, keyDown, keyUp, address, gpuAndScreen, selectedElementsLine, centerY, width, height, passwordChecked, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, input, updateCandidates, bootPreview, boot, createElements, checkPassword = "1234", 1, {"/OS.lua", "/init.lua"}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, UNICODE.sub, MATH.huge, "key_down", "key_up"
 
 proxy, execute, split =
 
@@ -43,27 +40,7 @@ if gpuSet and screen then
     gpuSetPaletteColor(9, BACKGROUND)
 end
 
-request, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, updateCandidates, cutText, input, bootPreview, boot, createElements =
-
-function(url) -- request()
-    if internet then
-        local handle, data, chunk = internet.request(url), ""
-
-        ::LOOP::
-        chunk = handle.read()
-
-        if chunk then
-            data = data .. chunk
-            goto LOOP
-        end
-
-        handle.close()
-
-        return data
-    else
-        return status("This option requires internet card", FALSE, mathHuge, 0)
-    end
-end,
+set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, updateCandidates, cutText, input, bootPreview, boot, createElements, checkPassword =
 
 function(x, y, string, background, foreground) -- set()
     gpuSetBackground(background or BACKGROUND)
@@ -91,9 +68,9 @@ end,
 
 function(text, title, wait, breakCode, onBreak, booting) -- status()
     if gpuAndScreen then
-        gpuSetPaletteColor(9, BACKGROUND)
         local lines, deadline, y, signalType, code, _ = split(text), computerUptime() + (wait or 0)
-        y = mathCeil(centerY - #lines / 2) + 1
+        y = mathCeil(centerY - #lines / 2)
+        gpuSetPaletteColor(9, BACKGROUND)
         clear()
 
         if title then
@@ -107,7 +84,7 @@ function(text, title, wait, breakCode, onBreak, booting) -- status()
         end
 
         while wait do
-            signalType, _, _, code = computerPullSignal(computerUptime() - deadline)
+            signalType, _, _, code, user = computerPullSignal(computerUptime() - deadline)
 
             if signalType == keyDown and (code == breakCode or breakCode == 0) then
                 if onBreak then
@@ -162,7 +139,7 @@ function(text, maxLength) -- cutText()
     return unicodeLen(text) > maxLength and unicodeSub(text, 1, maxLength) .. "…" or text
 end,
 
-function(prefix, y) -- input()
+function(prefix, y, hide) -- input()
     local text, prefixLen, cursorState, signalType, char, _ = "", unicodeLen(prefix), FALSE
 
     while 1 do
@@ -186,7 +163,7 @@ function(prefix, y) -- input()
         end
 
         fill(1, y, width, 1, " ")
-        set(centrize(prefixLen + unicodeLen(text)), y, prefix .. text .. (cursorState and "█" or ""), BACKGROUND, white)
+        set(centrize(prefixLen + unicodeLen(text)), y, prefix .. (hide and ("*"):rep(unicodeLen(text)) or text) .. (cursorState and "█" or ""), BACKGROUND, white)
     end
 
     fill(1, y, width, 1, " ")
@@ -214,6 +191,9 @@ function(image) -- boot()
         end
 
         image[1].close(handle)
+        if passwordOnBoot then
+            checkPassword()
+        end
         status(bootPreview(image, 1), FALSE, .5, FALSE, FALSE, 1)
         success, err = execute(data, "=" .. image[4])
 
@@ -225,7 +205,7 @@ function(image) -- boot()
     end
 end,
 
-function(elements, y, borderType, onArrowKeyUpOrDown, onElementSelected) -- createElements()
+function(elements, y, borderType, onArrowKeyUpOrDown, onDraw) -- createElements()
     -- borderType - 1 == small border
     -- borderType - 2 == big border
 
@@ -238,8 +218,8 @@ function(elements, y, borderType, onArrowKeyUpOrDown, onElementSelected) -- crea
             selectedElementsLine = withoutSelect and selectedElementsLine or SELF
             local elementsAndBorderLength, borderSpaces, elementLength, x, selectedElement, element = 0, borderType == 1 and 6 or 8
 
-            if onElementSelected then
-                onElementSelected(SELF)
+            if onDraw then
+                onDraw(SELF)
             end
 
             for i = 1, #SELF.e do
@@ -264,21 +244,42 @@ function(elements, y, borderType, onArrowKeyUpOrDown, onElementSelected) -- crea
             end
         end
     }
+end,
+
+function() -- checkPassowrd()
+    if not (#password == 0 or passwordChecked or input("Password: ", centerY, 1) == password) then
+        ERROR("Access denied")
+    end
+
+    passwordChecked = 1
 end
 
 status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
+    checkPassword()
     ::REFRESH::
     updateCandidates()
-    local signalType, code, options, drives, draw, bootImage, proxy, readOnly, newLabel, cmdOrUrl, data, _
+    local data, signalType, code, options, drives, draw, bootImage, proxy, readOnly, newLabel, cmdOrUrl, handle, chunk, _ = ""
 
     options = createElements({
-        {t = "Power off", a = function() computerShutdown() end}, -- Это сделано, потому что я вызываю функцию через :, туда вставляется self, и из-за этого компьютер перезагружается, а не выключается
+        {t = "Power off", a = function() computerShutdown() end},
         {t = "Execute", a = function()
-            cmdOrUrl = input("Cmd or URL: ", centerY + 7)
-            
-            if cmdOrUrl:match("http[s]?://") then
+            cmdOrUrl, code = input("Cmd or URL: ", centerY + 7), ""
+
+            if unicodeSub(cmdOrUrl, 1, 4) == "http" and internet then
                 status("Downloading...")
-                code = request(cmdOrUrl)
+                handle, chunk = internet.request(cmdOrUrl), ""
+
+                if handle then
+                    ::LOOP::
+
+                    if chunk then
+                        code = code .. chunk
+                        computerPullSignal()
+                        goto LOOP
+                    end
+
+                    handle.close()
+                end
             else
                 code = cmdOrUrl
             end
@@ -287,18 +288,14 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
             status((data == "" or not data and "is empty") or data, "Command result", mathHuge, 0)
             draw(FALSE, FALSE, 1, 1)
         end}
-    }, centerY + 2, 1, function(keyState)
-        if keyState == 0 then
-            selectedElementsLine = drives
-            draw(1, 1, FALSE, FALSE)
-        end
+    }, centerY + 2, 1, function()
+        selectedElementsLine = drives
+        draw(1, 1, FALSE, FALSE)
     end)
 
-    drives = createElements({}, centerY - 2, 2, function(keyState)
-        if keyState == 1 then
-            selectedElementsLine = options
-            draw(FALSE, FALSE, 1, 1)
-        end
+    drives = createElements({}, centerY - 2, 2, function()
+        selectedElementsLine = options
+        draw(FALSE, FALSE, 1, 1)
     end, function(SELF)
         bootImage = bootCandidates[SELF.s]
         proxy = bootImage[1]
@@ -309,9 +306,7 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
         centrizedSet(centerY + 7, ("Disk usage %s%% %s"):format(MATH.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "R/O" or"R/W"))
 
         if readOnly then
-            if options.s > 2 then
-                options.s = 2
-            end
+            options.s = options.s > 2 and 2 or options.s
             options.e[3] = FALSE
             options.e[4] = FALSE
         else
