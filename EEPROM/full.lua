@@ -1,5 +1,5 @@
 local COMPONENT, COMPUTER, MATH, UNICODE, BACKGROUND, FOREGROUND, white = component, computer, math, unicode, 0x002b36, 0x8cb9c5, 0xffffff
-local password, passwordOnBoot, bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, unicodeSub, mathHuge, keyDown, keyUp, address, gpuAndScreen, selectedElementsLine, centerY, width, height, passwordChecked, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, input, updateCandidates, bootPreview, boot, createElements, checkPassword = "1234", 1, {"/OS.lua", "/init.lua"}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, UNICODE.sub, MATH.huge, "key_down", "key_up"
+local password, passwordOnBoot, bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, unicodeSub, mathHuge, keyDown, keyUp, address, gpuAndScreen, selectedElementsLine, centerY, width, height, passwordChecked, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, input, updateCandidates, bootPreview, boot, createElements, checkPassword = "", FALSE, {"/OS.lua", "/init.lua"}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, UNICODE.sub, MATH.huge, "key_down", "key_up"
 
 proxy, execute, split =
 
@@ -272,9 +272,10 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
                 if handle then
                     ::LOOP::
 
+                    chunk = handle.read()
+
                     if chunk then
                         code = code .. chunk
-                        computerPullSignal()
                         goto LOOP
                     end
 
