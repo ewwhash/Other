@@ -350,23 +350,28 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
         end},
         {t = "Internet boot", a = function()
             url, code = input("URL: ", FALSE, centerY + 7, FALSE, 1), ""
-            status("Downloading...")
-            handle, chunk = internet.request(url), ""
 
-            if handle then
-                ::LOOP::
+            if url and url ~= "" then
+                handle, chunk = internet.request(url), ""
 
-                chunk = handle.read()
+                if handle then
+                    status("Downloading...")
+                    ::LOOP::
 
-                if chunk then
-                    code = code .. chunk
-                    goto LOOP
+                    chunk = handle.read()
+
+                    if chunk then
+                        code = code .. chunk
+                        goto LOOP
+                    end
+
+                    handle.close()
+                    status(SELECT(2, execute(code, "=internet boot")) or "is empty", "Internet boot result", mathHuge, 0)
+                else
+                    status("Malformed URL", "Internet boot result", mathHuge, 0)
                 end
-
-                handle.close()
             end
 
-            status(SELECT(2, execute(code, "=internet boot")) or "is empty", "Internet boot result", mathHuge, 0)
             draw(FALSE, FALSE, 1, 1)
         end}
     }, centerY + 2, 1, function()
@@ -384,7 +389,7 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
 
         fill(1, centerY + 5, width, 3, " ")
         centrizedSet(centerY + 5, bootPreview(bootImage), FALSE, WHITE)
-        centrizedSet(centerY + 7, ("Disk usage %s%% %s"):format(MATH.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "R/O" or"R/W"))
+        centrizedSet(centerY + 7, ("Disk usage %s%% %s"):format(MATH.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "Read only" or"Read & Write"))
 
         if readOnly then
             options.s = options.s > 2 and 2 or options.s
