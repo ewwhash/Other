@@ -58,7 +58,7 @@ function(timeout, breakCode, onBreak)
     repeat
         signalType, _, _, code = computerPullSignal(deadline - computerUptime())
 
-        if signalType == interrupted or code == breakCode or breakCode == 0 then
+        if signalType == interrupted or signalType == keyDown and (code == breakCode or breakCode == 0) then
             if onBreak then
                 onBreak()
             end
