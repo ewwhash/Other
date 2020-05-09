@@ -1,7 +1,27 @@
-local COMPONENT, COMPUTER, MATH, UNICODE, BACKGROUND, FOREGROUND, white = component, computer, math, unicode, 0x002b36, 0x8cb9c5, 0xffffff
-local password, passwordOnBoot, bootFiles, bootCandidates, componentList, componentProxy, mathCeil, computerPullSignal, computerUptime, computerShutdown, unicodeLen, unicodeSub, mathHuge, keyDown, keyUp, address, gpuAndScreen, selectedElementsLine, centerY, width, height, passwordChecked, proxy, execute, split, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, input, updateCandidates, bootPreview, boot, createElements, checkPassword = "", FALSE, {"/OS.lua", "/init.lua"}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.pullSignal, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, UNICODE.sub, MATH.huge, "key_down", "key_up"
+local COMPONENT, COMPUTER, MATH, TABLE, UNICODE, SELECT, BACKGROUND, FOREGROUND, WHITE = component, computer, math, table, unicode, select, 0x002b36, 0x8cb9c5, 0xffffff
+local password, passwordOnBoot, bootFiles, bootCandidates, keys, componentList, componentProxy, mathCeil, computerUptime, computerShutdown, unicodeLen, unicodeSub, mathHuge, tableConcat, tableUnpack, keyDown, keyUp, interrupted, computerPullSignal, address, gpuAndScreen, selectedElementsLine, centerY, width, height, passwordChecked, proxy, execute, split, sleep, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, input, print, updateCandidates, bootPreview, boot, createElements, checkPassword = "", FALSE, {"/OS.lua", "/init.lua"}, {}, {},COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, UNICODE.sub, MATH.huge, TABLE.concat, TABLE.unpack, "key_down", "key_up", "interrupted"
 
-proxy, execute, split =
+computerPullSignal = function(timeout, onInterrupt)
+    local signal = {COMPUTER.pullSignal(timeout)}
+
+    if signal[1] == keyDown then
+        keys[signal[4]] = 1
+    elseif signal[1] == keyUp then
+        keys[signal[4]] = FALSE
+    end
+
+    if keys[29] and keys[56] and keys[46] then
+        if onInterrupt then
+            onInterrupt()
+        end
+
+        return interrupted
+    else
+        return tableUnpack(signal)
+    end
+end
+
+proxy, execute, split, sleep =
 
 function(componentType)
     address = componentList(componentType)()
@@ -9,7 +29,11 @@ function(componentType)
 end,
 
 function(code, stdin, env)
-    local chunk, err = load(code, stdin, FALSE, env)
+    local chunk, err = load("return " .. code, stdin, FALSE, env)
+
+    if not chunk then
+        chunk, err = load(code, stdin, FALSE, env)
+    end
 
     if chunk then
         return xpcall(chunk, debug.traceback)
@@ -26,6 +50,21 @@ function(text, tabulate)
     end
 
     return lines
+end,
+
+function(timeout, breakCode, onBreak)
+    local deadline, signalType, _ = computerUptime() + (timeout or mathHuge)
+
+    repeat
+        signalType, _, _, code = computerPullSignal(deadline - computerUptime())
+
+        if signalType == interrupted or code == breakCode or breakCode == 0 then
+            if onBreak then
+                onBreak()
+            end
+            return 1
+        end
+    until computerUptime() >= deadline
 end
 
 local gpu, eeprom, internet, screen = proxy"gp" or {}, proxy"pr", proxy"in", componentList"re"()
@@ -38,9 +77,10 @@ if gpuSet and screen then
     gpuAndScreen, width, height = gpu.bind((screen)), gpu.maxResolution()
     centerY = height / 2
     gpuSetPaletteColor(9, BACKGROUND)
+    gpuSetPaletteColor(11, FOREGROUND)
 end
 
-set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, updateCandidates, cutText, input, bootPreview, boot, createElements, checkPassword =
+set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, updateCandidates, cutText, input, print, bootPreview, boot, createElements, checkPassword =
 
 function(x, y, string, background, foreground) -- set()
     gpuSetBackground(background or BACKGROUND)
@@ -68,13 +108,13 @@ end,
 
 function(text, title, wait, breakCode, onBreak, booting) -- status()
     if gpuAndScreen then
-        local lines, deadline, y, signalType, code, _ = split(text), computerUptime() + (wait or 0)
+        local lines, y = split(text), computerUptime() + (wait or 0)
         y = mathCeil(centerY - #lines / 2)
         gpuSetPaletteColor(9, BACKGROUND)
         clear()
 
         if title then
-            centrizedSet(y - 1, title, BACKGROUND, white)
+            centrizedSet(y - 1, title, BACKGROUND, WHITE)
             y = y + 1
         end
 
@@ -83,26 +123,16 @@ function(text, title, wait, breakCode, onBreak, booting) -- status()
             y = y + 1
         end
 
-        while wait do
-            signalType, _, _, code, user = computerPullSignal(computerUptime() - deadline)
-
-            if signalType == keyDown and (code == breakCode or breakCode == 0) then
-                if onBreak then
-                    onBreak()
-                end
-
-                break
-            elseif computerUptime() >= deadline then
-                if booting and gpuAndScreen then
-                    gpu.set = function(...)
-                        gpuSetPaletteColor(9, 0x336699)
-                        gpuSet(...)
-                        gpu.set = gpuSet
-                    end
-                end
-                break
+        if booting and gpuAndScreen then
+            gpu.set = function(...)
+                gpuSetPaletteColor(9, 0x336699)
+                gpuSetPaletteColor(11, 0xb4b4b4)
+                gpuSet(...)
+                gpu.set = gpuSet
             end
         end
+
+        return sleep(wait or 0, breakCode, onBreak)
     end
 end,
 
@@ -139,35 +169,66 @@ function(text, maxLength) -- cutText()
     return unicodeLen(text) > maxLength and unicodeSub(text, 1, maxLength) .. "…" or text
 end,
 
-function(prefix, y, hide) -- input()
-    local text, prefixLen, cursorState, signalType, char, _ = "", unicodeLen(prefix), FALSE
+function(prefix, X, y, hide, centrized) -- input()
+    local input, prefixLen, cursorPos, cursorState, x, cursorX, signalType, char, code, _ = "", unicodeLen(prefix), 1, 1
 
     while 1 do
-        signalType, _, char = computerPullSignal(.5)
+        signalType, _, char, code = computerPullSignal(.5)
 
-        if signalType == keyDown then
-            if char == 13 then
+        if signalType == interrupted then
+            input = FALSE
+            break
+        elseif signalType == keyDown then
+            if char >= 32 and unicodeLen(prefixLen .. input) < width - prefixLen - 1 then
+                input = unicodeSub(input, 1, cursorPos - 1) .. UNICODE.char(char) .. unicodeSub(input, cursorPos, -1)
+                cursorPos = cursorPos + 1
+            elseif char == 8 and #input > 0 then
+                input = unicodeSub(unicodeSub(input, 1, cursorPos - 1), 1, -2) .. unicodeSub(input, cursorPos, -1)
+                cursorPos = cursorPos - 1
+            elseif char == 13 then
                 break
-            elseif char >= 32 then
-                text = text .. UNICODE.char(char)
-            elseif char == 8 then
-                text = unicodeSub(text, 1, unicodeLen(text) - 1)
+            elseif code == 203 and cursorPos > 1 then
+                cursorPos = cursorPos - 1
+            elseif code == 205 and cursorPos <= unicodeLen(input) then
+                cursorPos = cursorPos + 1
             end
 
             cursorState = 1
         elseif signalType == "clipboard" then
-            text = text .. char
-            cursorState = 1
+            input = input .. char
+            cursorPos = cursorPos + unicodeLen(char)
         elseif signalType ~= keyUp then
             cursorState = not cursorState
         end
 
+        x = centrized and centrize(unicodeLen(input) + prefixLen) or X
+        cursorX = x + prefixLen + cursorPos - 1
+
         fill(1, y, width, 1, " ")
-        set(centrize(prefixLen + unicodeLen(text)), y, prefix .. (hide and ("*"):rep(unicodeLen(text)) or text) .. (cursorState and "█" or ""), BACKGROUND, white)
+        set(x, y, prefix .. (hide and ("*"):rep(unicodeLen(input)) or input), BACKGROUND, WHITE)
+        if cursorX <= width then
+            set(cursorX, y, gpu.get(cursorX, y), cursorState and WHITE or BACKGROUND, cursorState and BACKGROUND or WHITE)
+        end
     end
 
     fill(1, y, width, 1, " ")
-    return text
+    return input
+end,
+
+function(...) --- print()
+    local text, lines = TABLE.pack(...)
+
+    for i = 1, text.n do
+        text[i] = tostring(text[i])
+    end
+
+    lines = split(tableConcat(text, "    "), 1)
+
+    for i = 1, #lines do
+        gpu.copy(1, 1, width, height - 1, 0, -1)
+        fill(1, height - 1, width, 1, " ")
+        set(1, height - 1, lines[i])
+    end
 end,
 
 function(image, booting) -- bootPreview()
@@ -197,7 +258,7 @@ function(image) -- boot()
         status(bootPreview(image, 1), FALSE, .5, FALSE, FALSE, 1)
         success, err = execute(data, "=" .. image[4])
 
-        if not success and err then
+        if not success then
             ERROR(err)
         end
 
@@ -246,47 +307,66 @@ function(elements, y, borderType, onArrowKeyUpOrDown, onDraw) -- createElements(
     }
 end,
 
-function() -- checkPassowrd()
-    if not (#password == 0 or passwordChecked or input("Password: ", centerY, 1) == password) then
-        ERROR("Access denied")
-    end
+function() -- checkPassword()
+    if #password > 0 then
+        local passwordFromUser = input("Password: ", FALSE, centerY, 1, 1)
 
-    passwordChecked = 1
+        if passwordFromUser == FALSE then
+            computerShutdown()
+        elseif not (passwordChecked or passwordFromUser == password) then
+            ERROR("Access denied")
+        end
+
+        passwordChecked = 1
+    end
 end
 
 status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
     checkPassword()
     ::REFRESH::
     updateCandidates()
-    local data, signalType, code, options, drives, draw, bootImage, proxy, readOnly, newLabel, cmdOrUrl, handle, chunk, _ = ""
+    local env, signalType, code, options, drives, draw, bootImage, proxy, readOnly, newLabel, url, handle, chunk, _ = setmetatable({
+        print = print,
+        proxy = proxy,
+        os = {
+            sleep = function(timeout) sleep(timeout, FALSE, function() error("interrupted") end) end
+        }
+    }, {__index = _G})
 
     options = createElements({
         {t = "Power off", a = function() computerShutdown() end},
-        {t = "Execute", a = function()
-            cmdOrUrl, code = input("Cmd or URL: ", centerY + 7), ""
+        {t = "Shell", a = function()
+            clear()
 
-            if unicodeSub(cmdOrUrl, 1, 4) == "http" and internet then
-                status("Downloading...")
-                handle, chunk = internet.request(cmdOrUrl), ""
+            ::LOOP::
+                code = input("> ", 1, height)
 
-                if handle then
-                    ::LOOP::
-
-                    chunk = handle.read()
-
-                    if chunk then
-                        code = code .. chunk
-                        goto LOOP
-                    end
-
-                    handle.close()
+                if code then
+                    set(1, height, ">", BACKGROUND, WHITE)
+                    print(SELECT(2, execute(code, "=stdin", env)))
+                    goto LOOP
                 end
-            else
-                code = cmdOrUrl
+            draw(FALSE, FALSE, 1, 1)
+        end},
+        {t = "Internet boot", a = function()
+            url, code = input("URL: ", FALSE, centerY + 7, FALSE, 1), ""
+            status("Downloading...")
+            handle, chunk = internet.request(url), ""
+
+            if handle then
+                ::LOOP::
+
+                chunk = handle.read()
+
+                if chunk then
+                    code = code .. chunk
+                    goto LOOP
+                end
+
+                handle.close()
             end
 
-            _, data = execute(code, "=stdin")
-            status((data == "" or not data and "is empty") or data, "Command result", mathHuge, 0)
+            status(SELECT(2, execute(code, "=internet boot")) or "is empty", "Internet boot result", mathHuge, 0)
             draw(FALSE, FALSE, 1, 1)
         end}
     }, centerY + 2, 1, function()
@@ -303,16 +383,16 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
         readOnly = proxy.isReadOnly()
 
         fill(1, centerY + 5, width, 3, " ")
-        centrizedSet(centerY + 5, bootPreview(bootImage), FALSE, white)
+        centrizedSet(centerY + 5, bootPreview(bootImage), FALSE, WHITE)
         centrizedSet(centerY + 7, ("Disk usage %s%% %s"):format(MATH.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "R/O" or"R/W"))
 
         if readOnly then
             options.s = options.s > 2 and 2 or options.s
-            options.e[3] = FALSE
             options.e[4] = FALSE
+            options.e[5] = FALSE
         else
-            options.e[3] = {t = "Rename", a = function()
-                newLabel = input("New label: ", centerY + 9)
+            options.e[4] = {t = "Rename", a = function()
+                newLabel = input("New label: ", FALSE, centerY + 7, FALSE, 1)
 
                 if newLabel and newLabel ~= "" then
                     pcall(proxy.setLabel, newLabel)
@@ -322,7 +402,7 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
                     options:d()
                 end
             end}
-            options.e[4] = {t = "Format", a = function() proxy.remove("/") drives:d(1, 1) options:d() end}
+            options.e[5] = {t = "Format", a = function() proxy.remove("/") drives:d(1, 1) options:d() end}
         end
 
         options:d(1, 1)
@@ -344,13 +424,13 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
     draw(1, 1)
 
     ::LOOP::
-        signalType, _, _, code = computerPullSignal()
+        signalType, _, _, code = computerPullSignal(mathHuge, computerShutdown)
 
         if signalType == keyDown then
             if code == 200 then -- Up
-                selectedElementsLine.k(0)
+                selectedElementsLine.k()
             elseif code == 208 then -- Down
-                selectedElementsLine.k(1)
+                selectedElementsLine.k()
             elseif code == 203 and selectedElementsLine.s > 1 then -- Left
                 selectedElementsLine.s = selectedElementsLine.s - 1
                 selectedElementsLine:d()
