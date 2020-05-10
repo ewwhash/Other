@@ -1,5 +1,5 @@
 local COMPONENT, COMPUTER, MATH, TABLE, UNICODE, SELECT, BACKGROUND, FOREGROUND, WHITE = component, computer, math, table, unicode, select, 0x002b36, 0x8cb9c5, 0xffffff
-local password, passwordOnBoot, bootFiles, bootCandidates, keys, componentList, componentProxy, mathCeil, computerUptime, computerShutdown, unicodeLen, unicodeSub, mathHuge, tableConcat, tableUnpack, keyDown, keyUp, interrupted, computerPullSignal, address, gpuAndScreen, selectedElementsLine, centerY, width, height, passwordChecked, proxy, execute, split, sleep, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, input, print, updateCandidates, bootPreview, boot, createElements, checkPassword = "", FALSE, {"/OS.lua", "/init.lua"}, {}, {},COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, UNICODE.sub, MATH.huge, TABLE.concat, TABLE.unpack, "key_down", "key_up", "interrupted"
+local password, passwordOnBoot, bootFiles, bootCandidates, keys, componentList, componentProxy, mathCeil, computerUptime, computerShutdown, unicodeLen, unicodeSub, mathHuge, tableConcat, tableUnpack, keyDown, keyUp, interrupted, computerPullSignal, address, gpuAndScreen, selectedElementsLine, centerY, width, height, passwordChecked, proxy, execute, split, sleep, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, input, print, updateCandidates, bootPreview, boot, createElements, checkPassword = '', FALSE, {'/OS.lua', '/init.lua'}, {}, {},COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, UNICODE.sub, MATH.huge, TABLE.concat, TABLE.unpack, 'key_down', 'key_up', 'interrupted'
 
 computerPullSignal = function(timeout, onInterrupt)
     local signal = {COMPUTER.pullSignal(timeout)}
@@ -29,7 +29,7 @@ function(componentType)
 end,
 
 function(code, stdin, env)
-    local chunk, err = load("return " .. code, stdin, FALSE, env)
+    local chunk, err = load('return ' .. code, stdin, FALSE, env)
 
     if not chunk then
         chunk, err = load(code, stdin, FALSE, env)
@@ -45,8 +45,8 @@ end,
 function(text, tabulate)
     local lines = {}
 
-    for line in text:gmatch"[^\r\n]+" do
-        lines[#lines + 1] = line:gsub("\t", tabulate and "    " or "")
+    for line in text:gmatch'[^\r\n]+' do
+        lines[#lines + 1] = line:gsub('\t', tabulate and '    ' or '')
     end
 
     return lines
@@ -67,7 +67,7 @@ function(timeout, breakCode, onBreak)
     until computerUptime() >= deadline
 end
 
-local gpu, eeprom, internet, screen = proxy"gp" or {}, proxy"pr", proxy"in", componentList"re"()
+local gpu, eeprom, internet, screen = proxy'gp' or {}, proxy'pr', proxy'in', componentList're'()
 local gpuSet, gpuSetBackground, gpuSetForeground, gpuSetPaletteColor, eepromSetData, eepromGetData = gpu.set, gpu.setBackground, gpu.setForeground, gpu.setPaletteColor, eeprom.setData, eeprom.getData
 
 COMPUTER.setBootAddress = eepromSetData
@@ -95,7 +95,7 @@ function(x, y, w, h, symbol, background, foreground) -- fill()
 end,
 
 function() -- clear()
-    fill(1, 1, width, height, " ")
+    fill(1, 1, width, height, ' ')
 end,
 
 function(len) -- centrize()
@@ -137,7 +137,7 @@ function(text, title, wait, breakCode, onBreak, booting) -- status()
 end,
 
 function(err) -- ERROR()
-    return gpuAndScreen and status(err, "¯\\_(ツ)_/¯", mathHuge, 0, computerShutdown) or error(err)
+    return gpuAndScreen and status(err, '¯\\_(ツ)_/¯', mathHuge, 0, computerShutdown) or error(err)
 end,
 
 function(address) -- addCandidate()
@@ -145,7 +145,7 @@ function(address) -- addCandidate()
 
     if proxy then
         bootCandidates[#bootCandidates + 1] = {
-            proxy, proxy.getLabel() or "N/A", address
+            proxy, proxy.getLabel() or 'N/A', address
         }
 
         for i = 1, #bootFiles do
@@ -160,17 +160,17 @@ function() -- updateCandidates()
     bootCandidates = {}
     addCandidate(eepromGetData())
 
-    for filesystem in pairs(componentList("le")) do
-        addCandidate(eepromGetData() ~= filesystem and filesystem or "")
+    for filesystem in pairs(componentList('le')) do
+        addCandidate(eepromGetData() ~= filesystem and filesystem or '')
     end
 end,
 
 function(text, maxLength) -- cutText()
-    return unicodeLen(text) > maxLength and unicodeSub(text, 1, maxLength) .. "…" or text
+    return unicodeLen(text) > maxLength and unicodeSub(text, 1, maxLength) .. '…' or text
 end,
 
 function(prefix, X, y, hide, centrized) -- input()
-    local input, prefixLen, cursorPos, cursorState, x, cursorX, signalType, char, code, _ = "", unicodeLen(prefix), 1, 1
+    local input, prefixLen, cursorPos, cursorState, x, cursorX, signalType, char, code, _ = '', unicodeLen(prefix), 1, 1
 
     while 1 do
         signalType, _, char, code = computerPullSignal(.5)
@@ -194,7 +194,7 @@ function(prefix, X, y, hide, centrized) -- input()
             end
 
             cursorState = 1
-        elseif signalType == "clipboard" then
+        elseif signalType == 'clipboard' then
             input = input .. char
             cursorPos = cursorPos + unicodeLen(char)
         elseif signalType ~= keyUp then
@@ -204,14 +204,14 @@ function(prefix, X, y, hide, centrized) -- input()
         x = centrized and centrize(unicodeLen(input) + prefixLen) or X
         cursorX = x + prefixLen + cursorPos - 1
 
-        fill(1, y, width, 1, " ")
-        set(x, y, prefix .. (hide and ("*"):rep(unicodeLen(input)) or input), BACKGROUND, WHITE)
+        fill(1, y, width, 1, ' ')
+        set(x, y, prefix .. (hide and ('*'):rep(unicodeLen(input)) or input), BACKGROUND, WHITE)
         if cursorX <= width then
             set(cursorX, y, gpu.get(cursorX, y), cursorState and WHITE or BACKGROUND, cursorState and BACKGROUND or WHITE)
         end
     end
 
-    fill(1, y, width, 1, " ")
+    fill(1, y, width, 1, ' ')
     return input
 end,
 
@@ -222,18 +222,18 @@ function(...) --- print()
         text[i] = tostring(text[i])
     end
 
-    lines = split(tableConcat(text, "    "), 1)
+    lines = split(tableConcat(text, '    '), 1)
 
     for i = 1, #lines do
         gpu.copy(1, 1, width, height - 1, 0, -1)
-        fill(1, height - 1, width, 1, " ")
+        fill(1, height - 1, width, 1, ' ')
         set(1, height - 1, lines[i])
     end
 end,
 
 function(image, booting) -- bootPreview()
     address = cutText(image[3], booting and 36 or 6)
-    return image[4] and ("Boot%s %s from %s (%s)"):format(booting and "ing" or "", image[4], image[2], address) or ("Boot from %s (%s) is not available"):format(image[2], address)
+    return image[4] and ('Boot%s %s from %s (%s)'):format(booting and 'ing' or '', image[4], image[2], address) or ('Boot from %s (%s) is not available'):format(image[2], address)
 end,
 
 function(image) -- boot()
@@ -241,7 +241,7 @@ function(image) -- boot()
         if eepromGetData() ~= image[3] then
             eepromSetData(image[3])
         end
-        local handle, data, chunk, success, err = image[1].open(image[4], "r"), ""
+        local handle, data, chunk, success, err = image[1].open(image[4], 'r'), ''
 
         ::LOOP::
         chunk = image[1].read(handle, mathHuge)
@@ -256,7 +256,7 @@ function(image) -- boot()
             checkPassword()
         end
         status(bootPreview(image, 1), FALSE, .5, FALSE, FALSE, 1)
-        success, err = execute(data, "=" .. image[4])
+        success, err = execute(data, '=' .. image[4])
 
         if not success then
             ERROR(err)
@@ -275,7 +275,7 @@ function(elements, y, borderType, onArrowKeyUpOrDown, onDraw) -- createElements(
         s = 1,
         k = onArrowKeyUpOrDown,
         d = function(SELF, withoutBorder, withoutSelect) -- draw()
-            fill(1, y - 1, width, 3, " ", BACKGROUND)
+            fill(1, y - 1, width, 3, ' ', BACKGROUND)
             selectedElementsLine = withoutSelect and selectedElementsLine or SELF
             local elementsAndBorderLength, borderSpaces, elementLength, x, selectedElement, element = 0, borderType == 1 and 6 or 8
 
@@ -295,7 +295,7 @@ function(elements, y, borderType, onArrowKeyUpOrDown, onDraw) -- createElements(
                 elementLength = unicodeLen(element.t)
 
                 if selectedElement and not withoutBorder then
-                    fill(x - borderSpaces / 2, y - (borderType == 1 and 0 or 1), elementLength + borderSpaces, borderType == 1 and 1 or 3, " ", FOREGROUND)
+                    fill(x - borderSpaces / 2, y - (borderType == 1 and 0 or 1), elementLength + borderSpaces, borderType == 1 and 1 or 3, ' ', FOREGROUND)
                     set(x, y, element.t, FOREGROUND, BACKGROUND)
                 else
                     set(x, y, element.t, BACKGROUND, FOREGROUND)
@@ -309,19 +309,19 @@ end,
 
 function() -- checkPassword()
     if #password > 0 then
-        local passwordFromUser = input("Password: ", FALSE, centerY, 1, 1)
+        local passwordFromUser = input('Password: ', FALSE, centerY, 1, 1)
 
         if passwordFromUser == FALSE then
             computerShutdown()
         elseif not (passwordChecked or passwordFromUser == password) then
-            ERROR("Access denied")
+            ERROR('Access denied')
         end
 
         passwordChecked = 1
     end
 end
 
-status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
+status('Press ALT to stay in bootloader', FALSE, .5, 56, function()
     checkPassword()
     ::REFRESH::
     updateCandidates()
@@ -329,33 +329,33 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
         print = print,
         proxy = proxy,
         os = {
-            sleep = function(timeout) sleep(timeout, FALSE, function() error("interrupted") end) end
+            sleep = function(timeout) sleep(timeout, FALSE, function() error('interrupted') end) end
         }
     }, {__index = _G})
 
     options = createElements({
-        {t = "Power off", a = function() computerShutdown() end},
-        {t = "Shell", a = function()
+        {t = 'Power off', a = function() computerShutdown() end},
+        {t = 'Shell', a = function()
             clear()
 
             ::LOOP::
-                code = input("> ", 1, height)
+                code = input('> ', 1, height)
 
                 if code then
-                    set(1, height, ">", BACKGROUND, WHITE)
-                    print(SELECT(2, execute(code, "=stdin", env)))
+                    set(1, height, '>', BACKGROUND, WHITE)
+                    print(SELECT(2, execute(code, '=stdin', env)))
                     goto LOOP
                 end
             draw(FALSE, FALSE, 1, 1)
         end},
-        {t = "Internet boot", a = function()
-            url, code = input("URL: ", FALSE, centerY + 7, FALSE, 1), ""
+        {t = 'Internet boot', a = function()
+            url, code = input('URL: ', FALSE, centerY + 7, FALSE, 1), ''
 
-            if url and url ~= "" then
-                handle, chunk = internet.request(url), ""
+            if url and url ~= '' then
+                handle, chunk = internet.request(url), ''
 
                 if handle then
-                    status("Downloading...")
+                    status('Downloading...')
                     ::LOOP::
 
                     chunk = handle.read()
@@ -366,9 +366,9 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
                     end
 
                     handle.close()
-                    status(SELECT(2, execute(code, "=internet boot")) or "is empty", "Internet boot result", mathHuge, 0)
+                    status(SELECT(2, execute(code, '=internet boot')) or 'is empty', 'Internet boot result', mathHuge, 0)
                 else
-                    status("Malformed URL", "Internet boot result", mathHuge, 0)
+                    status('Malformed URL', 'Internet boot result', mathHuge, 0)
                 end
             end
 
@@ -387,19 +387,19 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
         proxy = bootImage[1]
         readOnly = proxy.isReadOnly()
 
-        fill(1, centerY + 5, width, 3, " ")
+        fill(1, centerY + 5, width, 3, ' ')
         centrizedSet(centerY + 5, bootPreview(bootImage), FALSE, WHITE)
-        centrizedSet(centerY + 7, ("Disk usage %s%% %s"):format(MATH.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "Read only" or"Read & Write"))
+        centrizedSet(centerY + 7, ('Disk usage %s%% %s'):format(MATH.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and 'Read only' or'Read & Write'))
 
         if readOnly then
             options.s = options.s > 2 and 2 or options.s
             options.e[4] = FALSE
             options.e[5] = FALSE
         else
-            options.e[4] = {t = "Rename", a = function()
-                newLabel = input("New label: ", FALSE, centerY + 7, FALSE, 1)
+            options.e[4] = {t = 'Rename', a = function()
+                newLabel = input('New label: ', FALSE, centerY + 7, FALSE, 1)
 
-                if newLabel and newLabel ~= "" then
+                if newLabel and newLabel ~= '' then
                     pcall(proxy.setLabel, newLabel)
                     bootImage[2] = cutText(newLabel, 16)
                     drives.e[SELF.s].t = cutText(newLabel, 6)
@@ -407,7 +407,7 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
                     options:d()
                 end
             end}
-            options.e[5] = {t = "Format", a = function() proxy.remove("/") drives:d(1, 1) options:d() end}
+            options.e[5] = {t = 'Format', a = function() proxy.remove('/') drives:d(1, 1) options:d() end}
         end
 
         options:d(1, 1)
@@ -423,7 +423,7 @@ status("Press ALT to stay in bootloader", FALSE, .5, 56, function()
         clear()
         drives:d(drivesWithoutBorder, drivesWithoutSelect)
         options:d(optionsWithoutBorder, optionsWithoutSelect)
-        centrizedSet(height, "Use ← ↑ → keys to move cursor; Enter to do something; F5 to refresh")
+        centrizedSet(height, 'Use ← ↑ → keys to move cursor; Enter to do something; F5 to refresh')
     end
 
     draw(1, 1)
@@ -457,4 +457,4 @@ for i = 1, #bootCandidates do
         computerShutdown()
     end
 end
-ERROR("No bootable medium found!")
+ERROR('No bootable medium found!')
