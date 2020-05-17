@@ -1,5 +1,0 @@
-local lzss = require("lzss")
-local file = io.open("/home/compressed.lua", "w")
-local SXF = ("local i,b,o,d,e,f,g,h,l=%q,1,'',''while b<=#i do e=o.byte(i,b)b=b+1;for j=0,7 do h=o.sub;l=h(i,b,b)if e>>j&1<1 and b<#i then g=o.unpack('>I2',i,b)f=1+(g>>4);l=h(d,f,f+(g&15)+2)b=b+1 end;b=b+1;o=o..l;d=h(d..l,-4^6)end end load(o,'=bios')()"):format(lzss.compress(io.read()))
-file:write(SXF)
-file:close()
