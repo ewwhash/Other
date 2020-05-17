@@ -1,12 +1,12 @@
-local args, options = require("shell").parse(...)
+local filename, lua53 = table.unpack({...})
 
-if not args[1] or options["h"] then
-    io.write("Usage: sxf [OPTIONS] <filename>\n")
-    io.write(" --lua5.3: add code for force Lua 5.3 (OpenComputers only).")
+if not filename then
+    io.write("Usage: sxf <filename> <Lua 5.3>\n")
+    io.write(" Lua 5.3: if second argument is not empty, force Lua 5.3 will be enabled")
     os.exit()
 end
 
-local newFilename = args[1] .. ".compressed"
+local newFilename = filename .. ".compressed"
 local lzss = load([=[
 
 --[[----------------------------------------------------------------------------
@@ -133,18 +133,18 @@ end
 
 return M
 ]=])()
-local file = io.open(args[1], "r")
+local file = io.open(filename, "r")
 local decompressed = file:read("*a")
 file:close()
 
 local compressed = lzss.compress(decompressed):gsub(".", {["\r"] = "\\r", ["\n"] = "\\n", ["\\"] = "\\\\", ['"'] = '\\"'})
 local SXF = ('local i,b,o,d,e,f,g,h,l="%s",1,"",""while b<=#i do e=o.byte(i,b)b=b+1;for j=0,7 do h=o.sub;l=h(i,b,b)if e>>j&1<1 and b<#i then g=o.unpack(">I2",i,b)f=1+(g>>4);l=h(d,f,f+(g&15)+2)b=b+1 end;b=b+1;o=o..l;d=h(d..l,-4^6)end end load(o,"=bios")()'):format(compressed)
 
-if options["lua5.3"] then
+if lua53 then
     SXF = ("computer.setArchitecture(\"Lua 5.3\");load('%s',=\"bios\")"):format(SXF)
 end
 
 file = io.open(newFilename, "w")
 file:write(SXF)
 file:close()
-print(("%s -> %s"):format(args[1], newFilename))
+print(("%s -> %s"):format(filename, newFilename))

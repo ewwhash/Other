@@ -1,5 +1,5 @@
 local COMPONENT, COMPUTER, MATH, TABLE, UNICODE, SELECT, BACKGROUND, FOREGROUND, WHITE = component, computer, math, table, unicode, select, 0x002b36, 0x8cb9c5, 0xffffff
-local password, passwordOnBoot, bootFiles, bootCandidates, keys, componentList, componentProxy, mathCeil, computerUptime, computerShutdown, unicodeLen, unicodeSub, mathHuge, tableConcat, tableUnpack, keyDown, keyUp, interrupted, computerPullSignal, address, gpuAndScreen, selectedElementsLine, centerY, width, height, passwordChecked, proxy, execute, split, sleep, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, input, print, updateCandidates, bootPreview, boot, createElements, checkPassword = "", FALSE, {"/OS.lua", "/init.lua"}, {}, {},COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, UNICODE.sub, MATH.huge, TABLE.concat, TABLE.unpack, "key_down", "key_up", "interrupted"
+local password, passwordOnBoot, bootFiles, bootCandidates, keys, componentList, componentProxy, mathCeil, computerUptime, computerShutdown, unicodeLen, unicodeSub, mathHuge, tableConcat, tableUnpack, keyDown, keyUp, interrupted, computerPullSignal, address, gpuAndScreen, selectedElementsLine, centerY, width, height, passwordChecked, proxy, execute, split, sleep, set, fill, clear, centrize, centrizedSet, status, ERROR, addCandidate, cutText, input, print, updateCandidates, bootPreview, boot, createElements, checkPassword = "", FALSE, {"/OS.lua", "/init.lua"}, {}, {}, COMPONENT.list, COMPONENT.proxy, MATH.ceil, COMPUTER.uptime, COMPUTER.shutdown, UNICODE.len, UNICODE.sub, MATH.huge, TABLE.concat, TABLE.unpack, "key_down", "key_up", "interrupted"
 
 computerPullSignal = function(timeout, onInterrupt)
     local signal = {COMPUTER.pullSignal(timeout)}
@@ -195,7 +195,7 @@ function(prefix, X, y, hide, centrized) -- input()
 
             cursorState = 1
         elseif signalType == "clipboard" then
-            input = input .. char
+            input = unicodeSub(input, 1, cursorPos - 1) .. char .. unicodeSub(input, cursorPos, -1)
             cursorPos = cursorPos + unicodeLen(char)
         elseif signalType ~= keyUp then
             cursorState = not cursorState
