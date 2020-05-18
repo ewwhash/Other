@@ -14,7 +14,7 @@ computerPullSignal = function(timeout, onHardInterrupt)
         if onHardInterrupt then
             onHardInterrupt()
         end
-            
+
         return interrupted
     elseif keys[29] and keys[32] then
         return interrupted
@@ -69,7 +69,7 @@ function(timeout, breakCode, onBreak)
     until computerUptime() >= deadline
 end
 
-local gpu, eeprom, internet, screen = proxy"gp" or {}, proxy"pr", proxy"in", componentList"re"()
+local gpu, eeprom, screen = proxy"gp" or {}, proxy"pr", componentList"re"()
 local gpuSet, gpuSetBackground, gpuSetForeground, gpuSetPaletteColor, eepromSetData, eepromGetData = gpu.set, gpu.setBackground, gpu.setForeground, gpu.setPaletteColor, eeprom.setData, eeprom.getData
 
 COMPUTER.setBootAddress = eepromSetData
@@ -164,7 +164,7 @@ function() -- updateCandidates()
     addCandidate(eepromGetData())
 
     for filesystem in pairs(componentList("le")) do
-        addCandidate(eepromGetData() ~= filesystem and filesystem or "")
+        addCandidate((eepromGetData() ~= filesystem and COMPUTER.tmpAddress() ~= filesystem) and filesystem or "")
     end
 end,
 
@@ -172,7 +172,7 @@ function(text, maxLength) -- cutText()
     return unicodeLen(text) > maxLength and unicodeSub(text, 1, maxLength) .. "…" or text
 end,
 
-function(prefix, X, y, hide, centrized) -- input()
+function(prefix, X, y, hide, centrized, lastInput) -- input()
     local input, prefixLen, cursorPos, cursorState, x, cursorX, signalType, char, code, _ = "", unicodeLen(prefix), 1, 1
 
     while 1 do
@@ -194,6 +194,12 @@ function(prefix, X, y, hide, centrized) -- input()
                 cursorPos = cursorPos - 1
             elseif code == 205 and cursorPos <= unicodeLen(input) then
                 cursorPos = cursorPos + 1
+            elseif code == 200 and lastInput then
+                input = lastInput
+                cursorPos = unicodeLen(lastInput) + 1
+            elseif code == 208 and lastInput then
+                input = ""
+                cursorPos = 1
             end
 
             cursorState = 1
@@ -236,7 +242,18 @@ end,
 
 function(drive, booting) -- bootPreview()
     address = cutText(drive[3], booting and 36 or 6)
-    return drive[4] and ("Boot%s %s from %s (%s)"):format(booting and "ing" or "", drive[4], drive[2], address) or ("Boot from %s (%s) is not available"):format(drive[2], address)
+    return drive[4] and ("Boot%s %s from %s (%s)")
+        :format(
+            booting and "ing" or "",
+            drive[4],
+            drive[2],
+            address
+        )
+    or ("Boot from %s (%s) is not available")
+        :format(
+            drive[2],
+            address
+        )
 end,
 
 function(drive) -- boot()
@@ -276,8 +293,12 @@ function(elements, y, borderType, onArrowKeyUpOrDown, onDraw) -- createElements(
     return {
         e = elements,
         s = 1,
+        y = y,
         k = onArrowKeyUpOrDown,
+        b = borderType,
         d = function(SELF, withoutBorder, withoutSelect) -- draw()
+            y = SELF.y
+            borderType = SELF.b
             fill(1, y - 1, width, 3, " ", BACKGROUND)
             selectedElementsLine = withoutSelect and selectedElementsLine or SELF
             local elementsAndBorderLength, borderSpaces, elementLength, x, selectedElement, element = 0, borderType == 1 and 6 or 8
@@ -327,8 +348,9 @@ end
 status("Press ALT to stay in bootloader", F, .5, 56, function()
     checkPassword()
     ::REFRESH::
+    internet = proxy"in"
     updateCandidates()
-    local env, signalType, code, options, drives, draw, drive, proxy, readOnly, newLabel, url, handle, chunk, correction, _ = setmetatable({
+    local env, signalType, code, data, options, drives, draw, drive, proxy, readOnly, newLabel, url, handle, chunk, correction, spaceTotal, _ = setmetatable({
         print = print,
         proxy = proxy,
         os = {
@@ -338,16 +360,16 @@ status("Press ALT to stay in bootloader", F, .5, 56, function()
 
     options = createElements({
         {t = "Power off", a = function() computerShutdown() end},
-        {t = "Shell", a = function()
+        {t = "Lua 5.3", a = function()
             clear()
 
             ::LOOP::
-                code = input("> ", 1, height)
+                data = input("> ", 1, height, F, F, data)
 
-                if code then
-                    print("> " .. code)
+                if data then
+                    print("> " .. data)
                     set(1, height, ">")
-                    print(SELECT(2, execute(code, "=stdin", env)))
+                    print(SELECT(2, execute(data, "=stdin", env)))
                     goto LOOP
                 end
             draw(F, F, 1, 1)
@@ -357,81 +379,98 @@ status("Press ALT to stay in bootloader", F, .5, 56, function()
         draw(1, 1, F, F)
     end)
 
-    if internet then
-        options.e[3] = {t = "Internet boot", a = function()
-            url, code = input("URL: ", F, centerY + 7, F, 1), ""
+    options.e[#options.e + 1] = internet and {t = "Internet boot", a = function()
+        url, data = input("URL: ", F, centerY + 7, F, 1), ""
 
-            if url and url ~= "" then
-                handle, chunk = internet.request(url), ""
+        if url and url ~= "" then
+            handle, chunk = internet.request(url), ""
 
-                if handle then
-                    status("Downloading...")
-                    ::LOOP::
+            if handle then
+                status("Downloading...")
+                ::LOOP::
 
-                    chunk = handle.read()
+                chunk = handle.read()
 
-                    if chunk then
-                        code = code .. chunk
-                        goto LOOP
-                    end
-
-                    handle.close()
-                    status(SELECT(2, execute(code, "=internet boot")) or "is empty", "Internet boot result", mathHuge, 0)
-                else
-                    status("Malformed URL", "Internet boot result", mathHuge, 0)
+                if chunk then
+                    data = data .. chunk
+                    goto LOOP
                 end
+
+                handle.close()
+                status(SELECT(2, execute(data, "=internet boot")) or "is empty", "Internet boot result", mathHuge, 0)
+            else
+                status("Malformed URL", "Internet boot result", mathHuge, 0)
             end
-
-            draw(F, F, 1, 1)
-        end}
-    end
-
-    drives = createElements({}, centerY - 2, 2, function()
-        selectedElementsLine = options
-        draw(F, F, 1, 1)
-    end, function(SELF)
-        drive = bootCandidates[SELF.s]
-        proxy = drive[1]
-        readOnly = proxy.isReadOnly()
-
-        fill(1, centerY + 5, width, 3, " ")
-        centrizedSet(centerY + 5, bootPreview(drive), F, WHITE)
-        centrizedSet(centerY + 7, ("Disk usage %s%% %s"):format(MATH.floor(proxy.spaceUsed() / (proxy.spaceTotal() / 100)), readOnly and "Read only" or"Read & Write"))
-
-        if readOnly then
-            options.s = options.s > 2 and 2 or options.s
-            options.e[correction] = F
-            options.e[correction + 1] = F
-        else
-            options.e[correction] = {t = "Rename", a = function()
-                newLabel = input("New label: ", F, centerY + 7, F, 1)
-
-                if newLabel and newLabel ~= "" then
-                    pcall(proxy.setLabel, newLabel)
-                    drive[2] = cutText(newLabel, 16)
-                    drives.e[SELF.s].t = cutText(newLabel, 6)
-                    drives:d(1, 1)
-                    options:d()
-                end
-            end}
-            options.e[correction + 1] = {t = "Format", a = function() drive[4] = F proxy.remove("/") drives:d(1, 1) options:d() end}
         end
 
-        options:d(1, 1)
-    end)
+        draw(F, F, 1, 1)
+    end}
 
-    correction = #options.e + 1
+    if #bootCandidates > 0 then
+        correction = #options.e + 1
+        drives = createElements({}, centerY - 2, 2, function()
+            selectedElementsLine = options
+            draw(F, F, 1, 1)
+        end, function(SELF)
+            drive = bootCandidates[SELF.s]
+            proxy = drive[1]
+            spaceTotal = proxy.spaceTotal()
+            readOnly = proxy.isReadOnly()
 
-    for i = 1, #bootCandidates do
-        drives.e[i] = {t = cutText(bootCandidates[i][2], 6), a = function(SELF)
-            boot(bootCandidates[SELF.s])
-        end}
+            fill(1, centerY + 5, width, 3, " ")
+            centrizedSet(centerY + 5, bootPreview(drive), F, WHITE)
+            centrizedSet(centerY + 7, ("Disk usage %s%% / %s / %s")
+                :format(
+                    MATH.floor(proxy.spaceUsed() / (spaceTotal / 100)),
+                    readOnly and "Read only" or"Read & Write",
+                    spaceTotal < 2 ^ 20 and "FDD" or "HDD"
+                )
+            )
+
+            for i = correction, #options.e do
+                options.e[i] = F
+            end
+
+            if readOnly then
+                options.s = #options.e
+            else
+                options.e[correction] = {t = "Rename", a = function()
+                    newLabel = input("New label: ", F, centerY + 7, F, 1)
+
+                    if newLabel and newLabel ~= "" then
+                        pcall(proxy.setLabel, newLabel)
+                        drive[2] = cutText(newLabel, 16)
+                        drives.e[SELF.s].t = cutText(newLabel, 6)
+                    end
+
+                    drives:d(1, 1)
+                    options:d()
+                end}
+                options.e[#options.e + 1] = {t = "Format", a = function() drive[4] = F proxy.remove("/") drives:d(1, 1) options:d() end}
+            end
+
+            options:d(1, 1)
+        end)
+
+        for i = 1, #bootCandidates do
+            drives.e[i] = {t = cutText(bootCandidates[i][2], 6), a = function(SELF)
+                boot(bootCandidates[SELF.s])
+            end}
+        end
+    else
+        options.y = centerY
+        options.b = 2
     end
 
     draw = function(optionsWithoutBorder, optionsWithoutSelect, drivesWithoutBorder, drivesWithoutSelect)
         clear()
-        drives:d(drivesWithoutBorder, drivesWithoutSelect)
-        options:d(optionsWithoutBorder, optionsWithoutSelect)
+        if drives then
+            drives:d(drivesWithoutBorder, drivesWithoutSelect)
+            options:d(optionsWithoutBorder, optionsWithoutSelect)
+        else
+            centrizedSet(centerY + 4, "No drives available", BACKGROUND, WHITE)
+            options:d()
+        end
         centrizedSet(height, "Use ← ↑ → to move cursor; Enter to do something; F5 to refresh")
     end
 
@@ -456,6 +495,8 @@ status("Press ALT to stay in bootloader", F, .5, 56, function()
             elseif code == 63 then
                 goto REFRESH
             end
+        elseif signalType == "component_added" or signalType == "component_removed" then
+            goto REFRESH
         end
     goto LOOP
 end)
