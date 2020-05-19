@@ -332,12 +332,12 @@ function(elements, y, borderType, onArrowKeyUpOrDown, onDraw) -- createElements(
 end,
 
 function() -- checkPassword()
-    if #password > 0 then
+    if #password > 0 and not passwordChecked then
         local passwordFromUser = input("Password: ", F, centerY, 1, 1)
 
         if passwordFromUser == F then
             computerShutdown()
-        elseif not (passwordChecked or passwordFromUser == password) then
+        elseif passwordFromUser ~= password then
             ERROR("Access denied")
         end
 
