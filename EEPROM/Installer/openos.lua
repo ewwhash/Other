@@ -9,7 +9,7 @@ if not component.isAvailable("internet") then
 end
 
 local eeprom, internet = component.eeprom, component.internet
-local password, passwordOnBoot, readOnly, lzss = false, false, false
+local password, requestPasswordAtBoot, readOnly, lzss = false, false, false
 
 local function request(url)
 	local handle, data, chunk = internet.request(url, nil, {["user-agent"]="Chrome/81.0.4044.129"}), ""
@@ -51,7 +51,7 @@ local function QA(text)
 end
 
 if computer.getArchitecture() == "Lua 5.2" then
-	if QA("This program requires Lua 5.3 or better. Install?") then
+	if QA("(This program requires Lua 5.3 or better. Install?)") then
 		computer.setArchitecture("Lua 5.3")
 	else
 		os.exit()
@@ -64,10 +64,10 @@ if QA("Set password for EEPROM?") then
 	io.write("Password: ")
 	password = read("*")
 	if unicode.len(password) > 12 then
-		print("\nMaximum password len is 12 symbols")
+		print("\nMaximum password length is 12 characters")
 		goto PASSWORD
 	end
-	passwordOnBoot = QA("\nAsk password on boot?")
+	requestPasswordAtBoot = QA("\nRequest password at boot?")
 end
 
 readOnly = QA("Make EEPROM read only?")
@@ -79,17 +79,17 @@ local compressed = lzss.getSXF(lzss.compress(request("https://raw.githubusercont
 		"%%(%w+)%%",
 		{
 			pass = password or "",
-			passOnBoot = passwordOnBoot and "1" or "F"}
+			passOnBoot = requestPasswordAtBoot and "1" or "F"}
 		)
 	),
-true)
+	true
+)
 
 print("Flashing...")
 eeprom.set(compressed)
-
 if readOnly then
 	print("Making EEPROM read only...")
-	eeprom.readOnly(eeprom.getChecksum())
+	eeprom.makeReadonly(eeprom.getChecksum())
 end
 
 computer.shutdown(true)
