@@ -19,7 +19,7 @@ local function main()
 
     local readOnlySwitch = container.layout:addChild(GUI.switchAndLabel(1, 1, 11 + unicode.len(localization.readOnly), 8, 0x8400FF, 0x1D1D1D, 0xFFFFFF, 0x878787, localization.readOnly, false))
     local passwordSwitch = container.layout:addChild(GUI.switchAndLabel(1, 4, 11 + unicode.len(localization.password), 8, 0xFFA800, 0x1D1D1D, 0xFFFFFF, 0x878787, localization.password, false))
-    local passwordInput = container.layout:addChild(GUI.input(1, 1, 30, 3, 0xEEEEEE, 0x555555, 0x999999, 0xFFFFFF, 0x2D2D2D, "", localization.password, nil, "*"))
+    local passwordInput = container.layout:addChild(GUI.input(1, 1, 30, 3, 0xEEEEEE, 0x555555, 0x999999, 0xFFFFFF, 0x2D2D2D, "", localization.password, nil, "•"))
     local passwordAtBootSwitch = container.layout:addChild(GUI.switchAndLabel(1, 4, 11 + unicode.len(localization.requestPasswordAtBoot), 8, 0x00fd01, 0x1D1D1D, 0xFFFFFF, 0x878787, localization.requestPasswordAtBoot, false))
     local flashButton = container.layout:addChild(GUI.roundedButton(1, 1, 17, 1, 0xFFFFFF, 0x000000, 0x878787, 0xFFFFFF, localization.flash))
 
