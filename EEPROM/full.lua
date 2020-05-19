@@ -214,7 +214,7 @@ function(prefix, X, y, hide, centrized, lastInput) -- input()
         cursorX = x + prefixLen + cursorPos - 1
 
         fill(1, y, width, 1, " ")
-        set(x, y, prefix .. (hide and ("*"):rep(unicodeLen(input)) or input), BACKGROUND, WHITE)
+        set(x, y, prefix .. (hide and ("•"):rep(unicodeLen(input)) or input), BACKGROUND, WHITE)
         if cursorX <= width then
             set(cursorX, y, gpu.get(cursorX, y), cursorState and WHITE or BACKGROUND, cursorState and BACKGROUND or WHITE)
         end
