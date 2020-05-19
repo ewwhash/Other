@@ -95,6 +95,7 @@ local function main()
         if load(compressed) then
             status(localization.flashing)
             eeprom.set(compressed)
+            eeprom.setLabel("Cyan BIOS")
             if readOnly then
                 status(localization.makingReadOnly)
                 eeprom.makeReadonly(eeprom.getChecksum())

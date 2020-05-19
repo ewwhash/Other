@@ -87,6 +87,7 @@ local compressed = lzss.getSXF(lzss.compress(request("https://raw.githubusercont
 
 print("Flashing...")
 eeprom.set(compressed)
+eeprom.setLabel("Cyan BIOS")
 if readOnly then
 	print("Making EEPROM read only...")
 	eeprom.makeReadonly(eeprom.getChecksum())
