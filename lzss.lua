@@ -144,5 +144,5 @@ local success = load(lzss, "=lzss.lua")
 if success then
 	return success()
 else
-	error("THIS. LIBRARY. REQUIRES. LUA 5.3. OR. BETTER. PLEASE. INSTALL. IT")
+	error("This program/library requires lua 5.3 or higher")
 end
