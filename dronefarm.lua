@@ -1,6 +1,6 @@
 sizeX, sizeZ = 19, 10 -- The size of farm (X and Z)
 height = 2 -- Height above ground
-wait = 300 -- Delay (In seconsd)
+wait = 300 -- Delay (In seconds)
 waitCharge = 15 -- Waiting for charge (In seconds too)
 waitMove = .1 -- Delay from moving block to block
 backOnCharge = 20 -- Fallback percent to home
