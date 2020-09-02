@@ -1,12 +1,12 @@
-sizeX, sizeZ = 19, 10 --Размеры фермы по X и Z
-height = 2 --Высота над культурой
-wait = 300 --Ожидание в секундах
-waitCharge = 15 --Ожидание зарядки(Если кончится заряд при сборе) в секундах
-waitMove = .1 --Ожидание между блоками(Собиранием культур) в секундах
-backOnCharge = 20 --Процент заряда, при котором идёт возвращение домой
-compass = "SOUTH" --Направление. Т.е NORTH, SOUTH, WEST, EAST
-mode = "SWING" --Режим работы(USE/SWING)
-place = false --Ставить культуру после того как сломал
+sizeX, sizeZ = 19, 10 -- The size of farm (X and Z)
+height = 2 -- Height above ground
+wait = 300 -- Delay (In seconsd)
+waitCharge = 15 -- Waiting for charge (In seconds too)
+waitMove = .1 -- Delay from moving block to block
+backOnCharge = 20 -- Fallback percent to home
+compass = "SOUTH" -- Direction (Drone "front")
+mode = "SWING" -- Working mode (SWING/USE)
+place = false -- Place plant after breaking (Only for SWING mode)
 
 d, c = component.proxy(component.list("drone")()), computer
 
